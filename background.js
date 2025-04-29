@@ -47,31 +47,16 @@ function sendError(message, details = null) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log(`📨 Received message: ${message.action}`, message);
   
-  // ─── Get stream ID for screen capture ───────────────────────────
-  if (message.action === "getStreamId") {
-    console.log("🔄 Requesting screen capture stream ID");
-    
-    // Use chrome.desktopCapture API to get a stream ID
-    chrome.desktopCapture.chooseDesktopMedia(
-      ["screen", "window", "tab"],
-      sender.tab,
-      (streamId) => {
-        console.log("✅ Got stream ID:", streamId);
-        sendResponse({ streamId: streamId });
-      }
-    );
-    
-    return true; // Keep the message channel open for the async response
-  }
-  
   // ─── Set or clear the prompt ────────────────────────────────────
   if (message.action === "setPrompt") {
     userPrompt = message.prompt;
     console.log("✅ Prompt set:", userPrompt);
+    
     // Send response back to confirm prompt was set
     sendResponse({ success: true, prompt: userPrompt });
     return true; // Keep the message channel open for the async response
   }
+  
   if (message.action === "clearPrompt") {
     userPrompt = "";
     console.log("✅ Prompt cleared");
@@ -79,61 +64,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // ─── Analyze a captured frame ──────────────────────────────────
-  if (message.action === "analyzeFrame") {
+  // ─── Analyze DOM for guidance ──────────────────────────────────
+  if (message.action === "analyzeDom") {
     if (!userPrompt) {
       sendError("No instructions provided. Please enter instructions first.");
       sendResponse({ success: false, error: "No instructions provided" });
       return true;
     }
 
-    // Process the frame asynchronously
-    processFrame(message, sender, sendResponse);
+    // Process the DOM asynchronously
+    analyzeDomForGuidance(message.domSnapshot, sender, sendResponse);
+    return true; // Keep the message channel open for the async response
+  }
+
+  // ─── Get next step after completing current step ──────────────
+  if (message.action === "getNextStep") {
+    if (!userPrompt) {
+      sendError("No instructions provided. Please enter instructions first.");
+      sendResponse({ success: false, error: "No instructions provided" });
+      return true;
+    }
+
+    getNextStep(message.currentStep, message.domSnapshot, sender, sendResponse);
     return true; // Keep the message channel open for the async response
   }
 });
 
-async function processFrame(message, sender, sendResponse) {
+async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
   try {
-    console.log("🔄 Sending JSON vision request…");
+    console.log("🔄 Analyzing DOM for guidance...");
 
-    // 1️⃣ Build the JSON payload
+    // 1️⃣ Build the JSON payload for the AI
     const payload = {
-      model: "gpt-4o",  // or "gpt-4o-mini"
+      model: "gpt-4o",  // or "gpt-4o-mini" for lower cost
       messages: [
         {
           role: "system",
-          content: [
-            {
-              type: "text",
-              text:
-                "Analyze this screenshot and instructions for this page and identify a step-by-step interaction path to accomplish the following task: " +
-                "For each step: (these are only examples for the structure, not actual data) " +
-                "1. Identify the exact UI element to interact with (button, input field, dropdown, etc.) " +
-                "2. Provide the normalized coordinates [x, y, w, h] where: " +
-                "   - x, y: position of the top-left corner (0-1 scale relative to viewport) " +
-                "   - w, h: width and height of the element (0-1 scale relative to viewport) " +
-                "3. Specify the action type: \"click\", \"type\", \"select\", etc. " +
-                "4. Include a step number and brief description of what this step accomplishes " +
-                "Return ONLY a JSON array with this structure: DO NOT INCLUDE A SINGLE WORD BESIDES THIS: " +
-                "[{\"step\": 1, \"element\": \"Login Button\", \"action\": \"click\", \"x\": 0.8, \"y\": 0.2, \"w\": 0.1, \"h\": 0.05, \"description\": \"Click login button to open authentication dialog\"}, ...]" +
-                "Ensure the steps are in logical sequence and will successfully complete the task."
-            }
-          ]
+          content: 
+            "You are a DOM analysis expert that can help users navigate websites. " +
+            "Given a DOM snapshot and a user's goal, identify the most logical sequence of steps to achieve that goal. " +
+            "For each step, find the exact DOM element to interact with and provide its details. " +
+            "Focus only on UI elements that can be interacted with (buttons, links, input fields, dropdowns, etc.) " +
+            "Return ONLY a JSON array with this structure: " +
+            "[{\"step\": 1, \"element\": \"Login Button\", \"action\": \"click\", " +
+            "\"selector\": \"#login-btn\", \"xpath\": \"//button[@id='login-btn']\", " +
+            "\"text\": \"Log In\", \"description\": \"Click the login button\"}]"
         },
         {
           role: "user",
-          content: [
-            { type: "text", text: "here are the instructions: " + userPrompt },
-            { "type": "image_url",  "image_url": { "url": message.image } }
-          ]
+          content: 
+            "Here is the user's goal: " + userPrompt + "\n\n" +
+            "Here is a snapshot of the current DOM: " + domSnapshot
         }
       ]
     };
 
-    console.log("➡️ Full messages payload:", JSON.stringify(payload.messages, null, 2));
-
-    // 2️⃣ Send the request
+    // 2️⃣ Send the request to OpenAI
+    console.log("🔄 Sending DOM analysis request to OpenAI...");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -144,45 +131,115 @@ async function processFrame(message, sender, sendResponse) {
     });
 
     // 3️⃣ Check response
-    const text = await res.text();
-    console.log("🔍 Status:", res.status, res.statusText);
-    console.log("🔍 Body:", text);
     if (!res.ok) {
+      const text = await res.text();
       throw new Error(`API error ${res.status}: ${text}`);
     }
 
-    // 4️⃣ Parse out boxes
-const data = JSON.parse(text);
-const assistantContent = data.choices[0].message.content;
-// Depending on API shape, you might get an array or a string
-let boxes;
-if (Array.isArray(assistantContent)) {
-  // If content is [{…}, { type:"text", text:"[...]"}]
-  const imgPart = assistantContent.find(c => c.type === "text")?.text;
-  boxes = JSON.parse(imgPart || "[]");
-} else {
-  // Strip markdown code blocks if present
-  const cleanContent = assistantContent
-    .replace(/```json\n/g, '')
-    .replace(/```/g, '')
-    .trim();
-  boxes = JSON.parse(cleanContent);
-}
-    console.log("✅ Boxes:", boxes);
+    // 4️⃣ Parse the steps
+    const data = await res.json();
+    const assistantContent = data.choices[0].message.content;
+    // Clean up any code block formatting if present
+    const cleanContent = assistantContent
+      .replace(/```json\n/g, '')
+      .replace(/```/g, '')
+      .trim();
+    
+    const steps = JSON.parse(cleanContent);
+    console.log("✅ Guidance steps:", steps);
 
-    // 5️⃣ Send boxes back to content script
+    // 5️⃣ Send steps back to content script
     if (sender?.tab?.id) {
       chrome.tabs.sendMessage(sender.tab.id, {
-        action: "drawBoxes",
-        boxes
+        action: "showGuidance",
+        steps
       });
     }
-    sendResponse({ success: true, boxes });
+    sendResponse({ success: true, steps });
   } catch (err) {
-    console.error("❌ Failed to analyze image:", err);
-    sendError("Failed to analyze image", err.message);
+    console.error("❌ Failed to analyze DOM:", err);
+    sendError("Failed to analyze DOM", err.message);
     sendResponse({ success: false, error: err.message });
   }
 }
 
+async function getNextStep(currentStep, domSnapshot, sender, sendResponse) {
+  try {
+    console.log("🔄 Getting next step after step", currentStep);
 
+    // 1️⃣ Build the JSON payload for the AI
+    const payload = {
+      model: "gpt-4o-mini",  // Use smaller model for this simpler task
+      messages: [
+        {
+          role: "system",
+          content: 
+            "You are a DOM analysis expert that can help users navigate websites. " +
+            "Given a DOM snapshot and a user's goal, identify the most logical sequence of steps to achieve that goal. " +
+            "For each step, find the exact DOM element to interact with and provide its details. " +
+             "You MUST include ALL of these properties in each step of your response: " +
+            "- step: The step number (integer) " +
+             "- element: A descriptive name for the element " +
+             "- action: What action to take (click, type, select, hover, etc.) " +
+             "- selector: A CSS selector that uniquely identifies this element " +
+             "- xpath: An XPath that uniquely identifies this element " +
+             "- text: The text content of the element, if any " +
+             "- description: A brief description of what this step accomplishes " +
+             "Return your response as a JSON array with EXACTLY this structure, nothing more or less. " +
+             "Example: [{\"step\": 1, \"element\": \"Login Button\", \"action\": \"click\", " +
+              "\"selector\": \"#login-btn\", \"xpath\": \"//button[@id='login-btn']\", " +
+             "\"text\": \"Log In\", \"description\": \"Click the login button\"}]"
+            },
+        {
+          role: "user",
+          content: 
+            "My goal is: " + userPrompt + "\n\n" +
+            "I just completed step " + currentStep + ". What should I do next? \n\n" +
+            "Here is the current DOM: " + domSnapshot
+        }
+      ]
+    };
+
+    // 2️⃣ Send the request to OpenAI
+    console.log("🔄 Sending next step request to OpenAI...");
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // 3️⃣ Check response
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`API error ${res.status}: ${text}`);
+    }
+
+    // 4️⃣ Parse the next step
+    const data = await res.json();
+    const assistantContent = data.choices[0].message.content;
+    // Clean up any code block formatting if present
+    const cleanContent = assistantContent
+      .replace(/```json\n/g, '')
+      .replace(/```/g, '')
+      .trim();
+    
+    const nextStep = JSON.parse(cleanContent);
+    console.log("✅ Next step:", nextStep);
+
+    // 5️⃣ Send next step back to content script
+    if (sender?.tab?.id) {
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: "showNextStep",
+        step: nextStep
+      });
+    }
+    sendResponse({ success: true, step: nextStep });
+  } catch (err) {
+    console.error("❌ Failed to get next step:", err);
+    sendError("Failed to get next step", err.message);
+    sendResponse({ success: false, error: err.message });
+  }
+}

@@ -1,26 +1,41 @@
 {
   "manifest_version": 3,
-  "name": "Step-by-Step Vision Guide",
+  "name": "DOM Guide Assistant",
   "version": "1.0",
-  "description": "Capture your screen, send screenshots + instructions to OpenAI, and draw boxes on each step.",
+  "description": "Creates step-by-step guided tours of websites using DOM analysis",
   "permissions": [
     "tabs",
     "storage",
-    "activeTab",
-    "desktopCapture"
+    "activeTab"
   ],
-  "host_permissions": ["https://api.openai.com/*"],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://cdn.jsdelivr.net/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icon.png"
+  },
+  "icons": {
+    "128": "icon.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icon.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }

@@ -1,31 +1,34 @@
-<!-- popup.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Step-by-Step Vision Guide</title>
+  <title>DOM Guide Assistant</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1>Step-by-Step Vision Guide</h1>
+    <h1>DOM Guide Assistant</h1>
 
     <div class="form-group">
       <label for="userPrompt" class="visually-hidden">Instructions</label>
       <input
         type="text"
         id="userPrompt"
-        placeholder="Describe your steps (e.g. “Log in → Click Settings → Select Theme”)"
+        placeholder="What do you want to do? (e.g., &quot;Log in to my account&quot;)"
         autocomplete="off"
       />
-      <button id="start" disabled>Start</button>
+      <button id="start" disabled>Guide Me</button>
     </div>
 
     <div class="button-group">
-      <button id="solved">Solved</button>
+      <button id="stop">Stop Guide</button>
     </div>
 
     <div id="statusMessage" class="status"></div>
+    
+    <div class="footer">
+      <p>Uses DOM analysis to guide you through completing tasks on websites</p>
+    </div>
   </div>
 
   <script src="popup.js"></script>

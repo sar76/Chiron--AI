@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const promptInput = document.getElementById('userPrompt');
   const startBtn    = document.getElementById('start');
-  const solvedBtn   = document.getElementById('solved');
+  const stopBtn     = document.getElementById('stop');
   const statusElem  = document.getElementById('statusMessage');
 
   // Listen for error messages from background script
@@ -21,17 +21,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Common start logic (used by Enter key & Start button)
-  const startCapture = async () => {
+  // Start the guide process
+  const startGuide = async () => {
     const prompt = promptInput.value.trim();
     if (!prompt) {
-      alert('Please enter your instructions first.');
+      alert('Please enter what you want to do first.');
       return;
     }
     
-    console.log("🔄 Starting capture with prompt:", prompt);
+    console.log("🔄 Starting guide with prompt:", prompt);
     statusElem.style.color = 'black';  // Reset color
-    statusElem.textContent = 'Starting capture...';
+    statusElem.textContent = 'Starting guide...';
     startBtn.disabled = true;  // Disable while processing
     
     try {
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       // 2) Tell content.js to begin
-      console.log("📤 Sending startCapture to content script");
+      console.log("📤 Sending startGuide to content script");
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
       if (!tab || !tab.id) {
@@ -70,29 +70,71 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       // Use a Promise to handle the asynchronous message passing
-      const captureStarted = await new Promise((resolve, reject) => {
-        chrome.tabs.sendMessage(tab.id, { action: 'startCapture' }, (response) => {
+      const guideStarted = await new Promise((resolve, reject) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'startGuide', prompt }, (response) => {
           if (chrome.runtime.lastError) {
-            console.error("❌ Error starting capture:", chrome.runtime.lastError);
+            console.error("❌ Error starting guide:", chrome.runtime.lastError);
             reject(chrome.runtime.lastError);
             return;
           }
           
-          console.log("✅ Capture started in content script");
+          console.log("✅ Guide started in content script");
           resolve(true);
         });
       });
       
-      if (!captureStarted) {
-        throw new Error("Failed to start capture in content script");
+      if (!guideStarted) {
+        throw new Error("Failed to start guide in content script");
       }
       
-      statusElem.textContent = 'Capture started…';
+      statusElem.textContent = 'Guide started. Follow the highlighted elements.';
     } catch (error) {
-      console.error("❌ Error in startCapture:", error);
+      console.error("❌ Error in startGuide:", error);
       statusElem.textContent = "Error: " + error.message;
       statusElem.style.color = 'red';
       startBtn.disabled = false;
+    }
+  };
+
+  // Stop the guide process
+  const stopGuide = async () => {
+    console.log("🔄 Stopping guide");
+    statusElem.textContent = 'Stopping guide...';
+    
+    try {
+      // Send stop message to content script
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab || !tab.id) {
+        throw new Error("No active tab found");
+      }
+      
+      await new Promise((resolve) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'stopGuide' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn("Note: Content script may not be active:", chrome.runtime.lastError);
+          }
+          resolve();
+        });
+      });
+      
+      // Clear prompt in background script
+      await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'clearPrompt' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn("Note: Error clearing prompt:", chrome.runtime.lastError);
+          }
+          resolve();
+        });
+      });
+      
+      // Update UI
+      statusElem.textContent = 'Guide stopped.';
+      startBtn.disabled = false;
+    } catch (error) {
+      console.error("❌ Error stopping guide:", error);
+      statusElem.textContent = "Error: " + error.message;
+      statusElem.style.color = 'red';
     }
   };
 
@@ -101,21 +143,16 @@ document.addEventListener('DOMContentLoaded', () => {
     startBtn.disabled = promptInput.value.trim() === '';
   });
 
-  // Enter key still kicks off capture
+  // Start guide on Enter key
   promptInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') startCapture();
+    if (e.key === 'Enter' && !startBtn.disabled) {
+      startGuide();
+    }
   });
 
-  // Start button does the same
-  startBtn.addEventListener('click', startCapture);
+  // Start guide on button click
+  startBtn.addEventListener('click', startGuide);
 
-  // Solved button unchanged
-  solvedBtn.addEventListener('click', async () => {
-    console.log("🔄 Solved button clicked");
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    chrome.tabs.sendMessage(tab.id, { action: 'stopCapture' });
-    chrome.runtime.sendMessage({ action: 'clearPrompt' });
-    statusElem.textContent = 'Stopped.';
-    startBtn.disabled = false;
-  });
+  // Stop guide on button click
+  stopBtn.addEventListener('click', stopGuide);
 });
