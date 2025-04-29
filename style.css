@@ -1,0 +1,65 @@
+/* General styles */
+body {
+  width: 300px;
+  margin: 0;
+  padding: 10px;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  padding: 10px;
+}
+
+h1 {
+  font-size: 18px;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.content {
+  margin-top: 10px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 5px 0;
+  width: 100%;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+#statusMessage {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
+  }
+}
+
+.highlight-pulse {
+  animation: pulse 2s infinite;
+}
