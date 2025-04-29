@@ -1,17 +1,33 @@
+<!-- popup.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Universal Helper</title>
+  <meta charset="UTF-8">
+  <title>Step-by-Step Vision Guide</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1>Universal Helper</h1>
-    <input type="text" id="userQuery" placeholder="What do you want to do?" />
-    <button id="startButton">Start Guide</button>
-    <div id="statusMessage"></div>
+    <h1>Step-by-Step Vision Guide</h1>
+
+    <div class="form-group">
+      <label for="userPrompt" class="visually-hidden">Instructions</label>
+      <input
+        type="text"
+        id="userPrompt"
+        placeholder="Describe your steps (e.g. “Log in → Click Settings → Select Theme”)"
+        autocomplete="off"
+      />
+      <button id="start" disabled>Start</button>
+    </div>
+
+    <div class="button-group">
+      <button id="solved">Solved</button>
+    </div>
+
+    <div id="statusMessage" class="status"></div>
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
 </html>

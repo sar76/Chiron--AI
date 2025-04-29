@@ -1,65 +1,101 @@
-/* General styles */
+/* style.css */
+
 body {
-  width: 300px;
   margin: 0;
-  padding: 10px;
-  font-family: Arial, sans-serif;
+  padding: 0;
+  width: 360px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f6f8;
+  color: #333;
 }
 
 .container {
-  padding: 10px;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 h1 {
-  font-size: 18px;
-  color: #333;
-  margin-bottom: 15px;
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  text-align: center;
+  color: #2c3e50;
 }
 
-.content {
-  margin-top: 10px;
+.form-group {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 input[type="text"] {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-  box-sizing: border-box;
+  flex: 1;
+  padding: 0.6rem;
+  font-size: 0.95rem;
+  border: 1px solid #ccd0d5;
+  border-radius: 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
 button {
-  background-color: #4CAF50;
-  color: white;
-  padding: 8px 16px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  margin: 5px 0;
-  width: 100%;
+  transition: background-color 0.2s;
 }
 
-button:hover {
+#start {
+  background-color: #4caf50;
+  color: #fff;
+}
+
+#start:disabled {
+  background-color: #a5d6a7;
+  cursor: not-allowed;
+}
+
+#start:not(:disabled):hover {
   background-color: #45a049;
 }
 
-#statusMessage {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #666;
+.button-group {
+  display: flex;
+  justify-content: center;
 }
 
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
-  }
+#solved {
+  background-color: #e74c3c;
+  color: #fff;
+  width: 100%;
 }
 
-.highlight-pulse {
-  animation: pulse 2s infinite;
+#solved:hover {
+  background-color: #c0392b;
+}
+
+.status {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #555;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  border: 0;
 }
