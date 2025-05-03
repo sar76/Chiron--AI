@@ -6,11 +6,12 @@
   "permissions": [
     "tabs",
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "https://api.openai.com/*",
-    "https://cdn.jsdelivr.net/*"
+    "https://us-central1-chiron-nbfpl-test.cloudfunctions.net/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -18,7 +19,11 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": [
+        "libs/intro.min.js",
+        "content.js"
+      ],
+      "css": ["libs/introjs.min.css"],
       "run_at": "document_idle"
     }
   ],
@@ -31,7 +36,11 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icon.png"],
+      "resources": [
+        "icon.png",
+        "libs/intro.min.js",
+        "libs/introjs.min.css"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
