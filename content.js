@@ -76,20 +76,42 @@ function getAttributes(el) {
 // Serialize interactive DOM elements
 function serializeDom() {
   const serialized = [];
+
+  // Expand to include role-based elements
   const interactiveElements = document.querySelectorAll(
-    "button, a, input, select, textarea"
+    "button, a, input, select, textarea, " +
+      "[role='button'], [role='link'], [role='menuitem'], " +
+      "[tabindex]:not([tabindex='-1'])"
   );
+
+  console.log(`🔍 Found ${interactiveElements.length} interactive elements`);
+
   interactiveElements.forEach((element) => {
     if (isVisibleElement(element)) {
-      serialized.push(extractElementData(element));
+      const data = extractElementData(element);
+      serialized.push(data);
+
+      // Log Gmail compose button if found
+      if (
+        element.textContent?.includes("Compose") ||
+        element.getAttribute("aria-label")?.includes("Compose")
+      ) {
+        console.log("📧 Found potential compose button:", data);
+      }
     }
   });
+
+  // Also check for role="button" elements
+  const roleButtons = document.querySelectorAll('[role="button"]');
+  console.log(`🔍 Found ${roleButtons.length} role="button" elements`);
+
   const contextElements = document.querySelectorAll("h1, h2, h3, label");
   contextElements.forEach((element) => {
     if (isVisibleElement(element)) {
       serialized.push(extractElementData(element));
     }
   });
+
   return JSON.stringify(serialized).substring(0, 100000);
 }
 
@@ -119,8 +141,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "startGuide") {
     startGuide(message.prompt)
-      .then(() => {
-        sendResponse({ success: true });
+      .then((result) => {
+        sendResponse(result);
       })
       .catch((error) => {
         console.error("❌ Error starting guide:", error);
@@ -176,27 +198,29 @@ async function startGuide(prompt) {
     console.log("🔄 Starting guide with prompt:", prompt);
     // Clear any existing guide
     stopGuide();
+
     // Get a snapshot of the current DOM
     const domSnapshot = serializeDom();
+
     // Send to background script for analysis
-    chrome.runtime.sendMessage(
-      {
-        action: "analyzeDom",
-        domSnapshot: domSnapshot,
-      },
-      async (response) => {
-        if (chrome.runtime.lastError) {
-          showError("Error: " + chrome.runtime.lastError.message);
-          return;
-        }
-        const { steps } = response;
-        allSteps = steps;
-        await showGuidance(steps);
-      }
-    );
+    const response = await chrome.runtime.sendMessage({
+      action: "analyzeDom",
+      domSnapshot: domSnapshot,
+    });
+
+    if (!response || !response.success) {
+      throw new Error(response?.error || "Failed to analyze DOM");
+    }
+
+    const { steps } = response;
+    allSteps = steps;
+    await showGuidance(steps);
+
+    return { success: true };
   } catch (error) {
     console.error("❌ Error starting guide:", error);
     showError("Error: " + error.message);
+    throw error;
   }
 }
 
@@ -220,26 +244,46 @@ function stopGuide() {
 // Show guidance pages
 async function showGuidance(steps) {
   try {
-    const introJs = await loadIntroJs();
+    await loadIntroJs(); // Make sure this completes
     showIntroJsGuidance(steps);
   } catch (error) {
     console.error("❌ Failed to load Intro.js:", error);
     showError("Error: Failed to load tour interface");
+    throw error; // Propagate the error
   }
 }
 
 // Uses Intro.js for multi-step tours
 function showIntroJsGuidance(steps) {
-  // Convert our steps to Intro.js format
+  console.log("🔍 Attempting to create Intro.js tour with steps:", steps);
+
   const introSteps = steps
     .map((step) => {
+      console.log(`🔍 Looking for element with selector: ${step.selector}`);
+
       const element = document.querySelector(step.selector);
+
       if (!element) {
         console.warn(
           `⚠️ Element not found for step ${step.step}: ${step.element}`
         );
+        console.warn(`Failed selector: ${step.selector}`);
+
+        // Let's see what elements ARE available that might match
+        console.log(
+          "Available compose buttons:",
+          document.querySelectorAll('[aria-label*="Compose"]')
+        );
+        console.log(
+          "Available role=button elements:",
+          document.querySelectorAll('[role="button"]')
+        );
+
         return null;
+      } else {
+        console.log(`✅ Found element for step ${step.step}`);
       }
+
       return {
         element: element,
         intro: `<strong>Step ${step.step}: ${step.element}</strong><br>${step.description}`,
@@ -247,6 +291,10 @@ function showIntroJsGuidance(steps) {
       };
     })
     .filter((step) => step !== null);
+
+  console.log(
+    `📊 Successfully mapped ${introSteps.length} out of ${steps.length} steps`
+  );
 
   const tour = introJs();
   tour.setOptions({
@@ -258,6 +306,7 @@ function showIntroJsGuidance(steps) {
     disableInteraction: false,
     scrollToElement: true,
   });
+
   tour.onchange(function (targetElement) {
     const currentIndex = tour._currentStep;
     currentStepElement = targetElement;

@@ -28,7 +28,6 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": "icon.png"
   },
   "icons": {
@@ -39,7 +38,8 @@
       "resources": [
         "icon.png",
         "libs/intro.min.js",
-        "libs/introjs.min.css"
+        "libs/introjs.min.css",
+        "popup-injector.js"
       ],
       "matches": ["<all_urls>"]
     }

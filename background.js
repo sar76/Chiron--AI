@@ -1,4 +1,10 @@
 // background.js
+chrome.action.onClicked.addListener((tab) => {
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: ["popup-injector.js"],
+  });
+});
 
 // ★ Replace with your own key ★
 const OPENAI_API_KEY =
@@ -167,6 +173,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ─── Route messages to content script ──────────────────────────
+  if (message.action === "startGuide" || message.action === "stopGuide") {
+    // Get the active tab
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (tabs.length === 0) {
+        sendResponse({ success: false, error: "No active tab found" });
+        return;
+      }
+
+      try {
+        // Send message to content script
+        const response = await chrome.tabs.sendMessage(tabs[0].id, message);
+        sendResponse(response);
+      } catch (error) {
+        console.error("❌ Error routing message to content script:", error);
+        sendResponse({ success: false, error: error.message });
+      }
+    });
+    return true; // Keep the message channel open for the async response
+  }
+
   // ─── Analyze DOM for guidance ──────────────────────────────────
   if (message.action === "analyzeDom") {
     if (!userPrompt) {
@@ -315,7 +342,12 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
       .trim();
 
     const steps = JSON.parse(cleanContent);
-    console.log("✅ Guidance steps:", steps);
+    console.log("✅ Guidance steps from AI:", steps);
+
+    // Log the selectors being generated
+    steps.forEach((step) => {
+      console.log(`Step ${step.step}: Selector = "${step.selector}"`);
+    });
 
     // After generating steps, record the interaction
     await fetch(`${FIREBASE_FUNCTIONS_URL}/recordInteraction`, {
