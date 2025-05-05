@@ -8,7 +8,7 @@ chrome.action.onClicked.addListener((tab) => {
 
 // ★ Replace with your own key ★
 const OPENAI_API_KEY =
-  "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";
+  "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";
 
 // Firebase configuration
 const FIREBASE_PROJECT_ID = "chiron-nbfpl-test";
