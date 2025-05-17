@@ -1,0 +1,71 @@
+{
+    "tasks": [
+      {
+        "key": "boldText",
+        "description": "Make currently selected text bold",
+        "selectors": [
+          "button[aria-label='Bold'], button[data-testid='text-bold-button']"
+        ],
+        "action": "click"
+      },
+      {
+        "key": "italicText",
+        "description": "Make currently selected text italic",
+        "selectors": [
+          "button[aria-label='Italics']"
+        ],
+        "action": "click"
+      },
+      {
+        "key": "heading1",
+        "description": "Turn text into H1",
+        "selectors": [
+          "button[aria-label='Text style menu']",
+          "button[aria-label='Apply heading']"
+        ],
+        "action": "sequence"
+      },
+      {
+        "key": "heading2",
+        "description": "Turn text into H2",
+        "selectors": [
+          "button[aria-label='Text style menu']",
+          "button[aria-label='Apply subheading']"
+        ],
+        "action": "sequence"
+      },      
+      {
+        "key": "alignLeft",
+        "description": "Align text to the left",
+        "selectors": [
+          "button[aria-label^='Toggle text alignment, current alignment:']"
+        ],
+        "action": "click"
+      },
+      {
+        "key": "alignCenter",
+        "description": "Align text to the center",
+        "selectors": [
+          "button[aria-label^='Toggle text alignment, current alignment:']"
+        ],
+        "action": "click"
+      },
+      {
+        "key": "alignRight",
+        "description": "Align text to the right",
+        "selectors": [
+          "button[aria-label^='Toggle text alignment, current alignment:']"
+        ],
+        "action": "click"
+      },
+      {
+        "key": "bulletList",
+        "description": "Convert text to bullet list",
+        "selectors": [
+          "button[aria-label='List']"
+        ],
+        "action": "click"
+      }
+    ]
+  }
+  

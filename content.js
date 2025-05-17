@@ -178,153 +178,195 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // No response needed for error messages
     return false;
   }
-});
 
-// Persist guide state to chrome.storage
-function persistGuideState(steps, currentIndex) {
-  console.log(
-    `📝 Persisting guide state: step ${currentIndex} of ${steps.length} steps`
-  );
-  // Fire-and-forget message, no response needed
-  chrome.runtime.sendMessage({
-    action: "persistGuideState",
-    state: { steps, currentIndex },
-  });
-}
+  if (message.action === "showGuidance") {
+    showGuidance(message.steps)
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((error) => {
+        console.error("❌ Error showing guidance:", error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
 
-// Start the guidance process
-async function startGuide(prompt) {
-  try {
-    console.log("🔄 Starting guide with prompt:", prompt);
-    // Clear any existing guide
-    stopGuide();
+  if (message.action === "showNextStep") {
+    if (window.introJs) {
+      introJs().goToStep(message.step);
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, error: "Intro.js not initialized" });
+    }
+    return true;
+  }
 
-    // Get a snapshot of the current DOM
-    const domSnapshot = serializeDom();
+  // Canva handlers removed - now handled by Canva.js
 
-    // Send to background script for analysis
-    const response = await chrome.runtime.sendMessage({
-      action: "analyzeDom",
-      domSnapshot: domSnapshot,
+  // Persist guide state to chrome.storage
+  function persistGuideState(steps, currentIndex) {
+    console.log(
+      `📝 Persisting guide state: step ${currentIndex} of ${steps.length} steps`
+    );
+    // Fire-and-forget message, no response needed
+    chrome.runtime.sendMessage({
+      action: "persistGuideState",
+      state: { steps, currentIndex },
     });
-
-    if (!response || !response.success) {
-      throw new Error(response?.error || "Failed to analyze DOM");
-    }
-
-    const { steps } = response;
-    allSteps = steps;
-    await showGuidance(steps);
-
-    return { success: true };
-  } catch (error) {
-    console.error("❌ Error starting guide:", error);
-    showError("Error: " + error.message);
-    throw error;
   }
-}
 
-// Stop the guidance and clean up
-function stopGuide() {
-  console.log("🔄 Stopping guide");
-  // Reset state
-  currentStepElement = null;
-  currentStepNumber = 0;
-  allSteps = [];
-  // Stop Intro.js if it's running
-  if (window.introJs) {
+  // Start the guidance process
+  async function startGuide(prompt) {
     try {
-      window.introJs().exit();
-    } catch (e) {
-      console.log("Note: No active Intro.js tour to exit");
-    }
-  }
-}
+      console.log("🔄 Starting guide with prompt:", prompt);
+      // Clear any existing guide
+      stopGuide();
 
-// Show guidance pages
-async function showGuidance(steps) {
-  try {
-    await loadIntroJs(); // Make sure this completes
-    showIntroJsGuidance(steps);
-  } catch (error) {
-    console.error("❌ Failed to load Intro.js:", error);
-    showError("Error: Failed to load tour interface");
-    throw error; // Propagate the error
-  }
-}
+      // Get a snapshot of the current DOM
+      const domSnapshot = serializeDom();
 
-// Uses Intro.js for multi-step tours
-function showIntroJsGuidance(steps) {
-  console.log("🔍 Attempting to create Intro.js tour with steps:", steps);
+      // Send to background script for analysis
+      const response = await chrome.runtime.sendMessage({
+        action: "analyzeDom",
+        domSnapshot: domSnapshot,
+      });
 
-  const introSteps = steps
-    .map((step) => {
-      console.log(`🔍 Looking for element with selector: ${step.selector}`);
-
-      const element = document.querySelector(step.selector);
-
-      if (!element) {
-        console.warn(
-          `⚠️ Element not found for step ${step.step}: ${step.element}`
-        );
-        console.warn(`Failed selector: ${step.selector}`);
-
-        // Let's see what elements ARE available that might match
-        console.log(
-          "Available compose buttons:",
-          document.querySelectorAll('[aria-label*="Compose"]')
-        );
-        console.log(
-          "Available role=button elements:",
-          document.querySelectorAll('[role="button"]')
-        );
-
-        return null;
-      } else {
-        console.log(`✅ Found element for step ${step.step}`);
+      if (!response || !response.success) {
+        throw new Error(response?.error || "Failed to analyze DOM");
       }
 
-      return {
-        element: element,
-        intro: `<strong>Step ${step.step}: ${step.element}</strong><br>${step.description}`,
-        position: "auto",
-      };
-    })
-    .filter((step) => step !== null);
+      const { steps } = response;
+      allSteps = steps;
+      await showGuidance(steps);
 
-  console.log(
-    `📊 Successfully mapped ${introSteps.length} out of ${steps.length} steps`
-  );
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Error starting guide:", error);
+      showError("Error: " + error.message);
+      throw error;
+    }
+  }
 
-  const tour = introJs();
-  tour.setOptions({
-    steps: introSteps,
-    showBullets: true,
-    showProgress: true,
-    highlightClass: "introjs-red-highlight",
-    exitOnOverlayClick: false,
-    disableInteraction: false,
-    scrollToElement: true,
-  });
+  // Stop the guidance and clean up
+  function stopGuide() {
+    console.log("🔄 Stopping guide");
+    // Reset state
+    currentStepElement = null;
+    currentStepNumber = 0;
+    allSteps = [];
+    // Stop Intro.js if it's running
+    if (window.introJs) {
+      try {
+        window.introJs().exit();
+      } catch (e) {
+        console.log("Note: No active Intro.js tour to exit");
+      }
+    }
+  }
 
-  tour.onchange(function (targetElement) {
-    const currentIndex = tour._currentStep;
-    currentStepElement = targetElement;
-    currentStepNumber = steps[currentIndex].step;
-    console.log(`✅ User moved to step ${currentStepNumber}`);
-    persistGuideState(steps, currentIndex);
-  });
+  // Show guidance pages
+  async function showGuidance(steps) {
+    try {
+      await loadIntroJs(); // Make sure this completes
+      showIntroJsGuidance(steps);
+    } catch (error) {
+      console.error("❌ Failed to load Intro.js:", error);
+      showError("Error: Failed to load tour interface");
+      throw error; // Propagate the error
+    }
+  }
 
-  tour.oncomplete(function () {
-    console.log("✅ Tour completed");
-    showSuccessMessage("Task completed successfully!");
-  });
+  function showIntroJsGuidance(steps) {
+    console.log("🔍 Attempting to create Intro.js tour with steps:", steps);
 
-  tour.onexit(function () {
-    console.log("🔄 Tour exited");
-  });
+    // Map each step to an Intro.js configuration, keeping all original logging
+    const introSteps = steps
+      .map((step) => {
+        console.log(`🔍 Looking for element with selector: ${step.selector}`);
+        const element = document.querySelector(step.selector);
 
-  // Start the tour
-  tour.start();
-  persistGuideState(steps, 0);
-}
+        if (!element) {
+          console.warn(
+            `⚠️ Element not found for step ${step.step}: ${step.element}`
+          );
+          console.warn(`Failed selector: ${step.selector}`);
+
+          // Debug helpers
+          console.log(
+            "Available compose buttons:",
+            document.querySelectorAll('[aria-label*="Compose"]')
+          );
+          console.log(
+            "Available role=button elements:",
+            document.querySelectorAll('[role="button"]')
+          );
+          return null;
+        } else {
+          console.log(`✅ Found element for step ${step.step}`);
+        }
+
+        return {
+          element: element,
+          intro: `<strong>Step ${step.step}: ${step.element}</strong><br>${step.description}`,
+          position: "auto",
+        };
+      })
+      .filter((step) => step !== null);
+
+    console.log(
+      `📊 Successfully mapped ${introSteps.length} out of ${steps.length} steps`
+    );
+
+    const tour = introJs();
+    tour.setOptions({
+      steps: introSteps,
+      showBullets: true,
+      showProgress: true,
+      highlightClass: "introjs-red-highlight",
+      exitOnOverlayClick: false,
+      disableInteraction: false,
+      scrollToElement: true,
+    });
+
+    // Persist state on each step change
+    tour.onchange(function (targetElement) {
+      const currentIndex = tour._currentStep;
+      const currentStepNumber = steps[currentIndex].step;
+      console.log(`✅ User moved to step ${currentStepNumber}`);
+      persistGuideState(steps, currentIndex);
+    });
+
+    // Auto-advance when the user actually clicks the highlighted element
+    steps.forEach((step, idx) => {
+      const el = document.querySelector(step.selector);
+      if (el) {
+        el.addEventListener(
+          "click",
+          () => {
+            if (tour._currentStep < introSteps.length - 1) {
+              tour.next();
+            }
+          },
+          { once: true }
+        );
+      }
+    });
+
+    // On complete: show success, clear stored state, and notify background
+    tour.oncomplete(function () {
+      console.log("✅ Tour completed");
+      showSuccessMessage("Task completed successfully!");
+      chrome.runtime.sendMessage({ action: "stopGuide" });
+    });
+
+    // On exit: clear stored state and notify background
+    tour.onexit(function () {
+      console.log("🔄 Tour exited");
+      chrome.runtime.sendMessage({ action: "stopGuide" });
+    });
+
+    // Start the tour and persist initial state
+    tour.start();
+    persistGuideState(steps, 0);
+  }
+});

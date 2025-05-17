@@ -10,11 +10,14 @@
     "scripting"
   ],
   "host_permissions": [
+    "<all_urls>",
     "https://api.openai.com/*",
-    "https://us-central1-chiron-nbfpl-test.cloudfunctions.net/*"
+    "https://us-central1-chiron-nbfpl-test.cloudfunctions.net/*",
+    "https://*.canva.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -24,6 +27,16 @@
         "content.js"
       ],
       "css": ["libs/introjs.min.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.canva.com/*"],
+      "js": ["Canva.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.canva.com/*"],
+      "js": ["popup-injector.js"],
       "run_at": "document_idle"
     }
   ],
@@ -39,9 +52,14 @@
         "icon.png",
         "libs/intro.min.js",
         "libs/introjs.min.css",
-        "popup-injector.js"
+        "popup-injector.js",
+        "Canva.json"
       ],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": ["Canva.json"],
+      "matches": ["https://*.canva.com/*"]
     }
   ],
   "content_security_policy": {

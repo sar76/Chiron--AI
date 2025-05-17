@@ -1,9 +1,35 @@
 // background.js
-chrome.action.onClicked.addListener((tab) => {
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ["popup-injector.js"],
-  });
+console.log("🚀 Background script starting...");
+
+// Listen for extension icon clicks
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log("🖱️ Extension icon clicked on tab:", tab.id);
+
+  // Only inject popup-injector.js, Canva.js is handled by content_scripts
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["popup-injector.js"],
+    });
+    console.log("✅ Injected popup-injector.js");
+  } catch (err) {
+    console.error("❌ Failed to inject popup-injector.js:", err);
+  }
+});
+
+// Listen for tab updates to check guide state
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && tab.url?.includes("canva.com")) {
+    const key = `guide_${tabId}`;
+    console.log("🔍 Checking guide key:", key);
+    chrome.storage.local.get(key, (result) => {
+      const state = result[key];
+      console.log("📦 Retrieved guide state:", state);
+      if (!state) {
+        console.warn("⚠️ No guide state found for tab", tabId);
+      }
+    });
+  }
 });
 
 // ★ Replace with your own key ★
@@ -90,12 +116,100 @@ async function sendResumeMessage(tabId, state, retryCount = 0) {
   }
 }
 
-// 1) Receive and store from content.js
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (msg.action === "persistGuideState" && sender.tab?.id) {
-    console.log(`📥 Received guide state from tab ${sender.tab.id}`);
-    const key = GUIDE_KEY(sender.tab.id);
-    chrome.storage.local.set({ [key]: msg.state });
+// Log all incoming messages
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log(`📨 Received message: ${msg.action}`, msg);
+
+  switch (msg.action) {
+    case "persistGuideState":
+      if (sender.tab?.id) {
+        console.log(`📥 Received guide state from tab ${sender.tab.id}`);
+        const key = GUIDE_KEY(sender.tab.id);
+        chrome.storage.local.set({ [key]: msg.state }, () => {
+          sendResponse({ success: true });
+        });
+        return true;
+      }
+      break;
+
+    case "startGuide":
+      // Get the active tab
+      chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+        if (tabs.length === 0) {
+          sendResponse({ success: false, error: "No active tab found" });
+          return;
+        }
+
+        try {
+          // Send message to content script
+          const response = await chrome.tabs.sendMessage(tabs[0].id, msg);
+          sendResponse(response);
+        } catch (error) {
+          console.error("❌ Error routing message to content script:", error);
+          sendResponse({ success: false, error: error.message });
+        }
+      });
+      return true;
+
+    case "stopGuide":
+      if (sender.tab?.id) {
+        chrome.storage.local.remove(GUIDE_KEY(sender.tab.id), () => {
+          // then route to content script to exit Intro.js
+          chrome.tabs.query(
+            { active: true, currentWindow: true },
+            async (tabs) => {
+              if (tabs.length === 0) {
+                sendResponse({ success: false, error: "No active tab found" });
+                return;
+              }
+
+              try {
+                const response = await chrome.tabs.sendMessage(tabs[0].id, msg);
+                sendResponse(response);
+              } catch (error) {
+                console.error(
+                  "❌ Error routing message to content script:",
+                  error
+                );
+                sendResponse({ success: false, error: error.message });
+              }
+            }
+          );
+        });
+        return true;
+      }
+      break;
+
+    case "setPrompt":
+      userPrompt = msg.prompt;
+      console.log("✅ Prompt set:", userPrompt);
+      sendResponse({ success: true, prompt: userPrompt });
+      return true;
+
+    case "clearPrompt":
+      userPrompt = "";
+      console.log("✅ Prompt cleared");
+      sendResponse({ success: true });
+      return true;
+
+    case "analyzeDom":
+      if (!userPrompt) {
+        sendError("No instructions provided. Please enter instructions first.");
+        sendResponse({ success: false, error: "No instructions provided" });
+        return true;
+      }
+      analyzeDomForGuidance(msg.domSnapshot, sender, sendResponse);
+      return true;
+
+    case "runCanvaPrompt":
+    case "runCanvaTask":
+      // Forward Canva-related messages to the content script
+      if (sender.tab?.id) {
+        console.log(`📤 Forwarding ${msg.action} to tab ${sender.tab.id}`);
+        chrome.tabs.sendMessage(sender.tab.id, msg, sendResponse);
+        return true; // Keep the message channel open for async response
+      }
+      break;
   }
 });
 
@@ -120,112 +234,47 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 // 3) When any tab finishes loading, resume if state exists
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status !== "complete") return;
   console.log(`🔄 Tab ${tabId} finished loading`);
 
   const key = GUIDE_KEY(tabId);
-  const data = await chrome.storage.local.get(key);
-  const state = data[key];
+  console.log("🔍 Checking guide key:", key);
 
-  if (!state) {
-    console.log(`⚠️ No guide state found for tab ${tabId}`);
-    return;
-  }
+  chrome.storage.local.get(key, async (data) => {
+    const state = data[key];
+    console.log("📦 Retrieved guide state:", state);
 
-  console.log(
-    `📤 Attempting to resume guide in tab ${tabId} at step ${state.currentIndex}`
-  );
+    if (!state) {
+      console.log(`⚠️ No guide state found for tab ${tabId}`);
+      return;
+    }
 
-  // First try to inject the content script
-  const injected = await injectContentScript(tabId);
-  if (!injected) {
-    console.error(`❌ Failed to inject content script into tab ${tabId}`);
-    return;
-  }
+    if (state.currentIndex >= state.steps.length - 1) {
+      console.log(`🔄 Guide complete; skipping resume for tab ${tabId}`);
+      return;
+    }
 
-  // Then try to send the resume message
-  await sendResumeMessage(tabId, state);
+    console.log(
+      `📤 Attempting to resume guide in tab ${tabId} at step ${state.currentIndex}`
+    );
+
+    // First try to inject the content script
+    const injected = await injectContentScript(tabId);
+    if (!injected) {
+      console.error(`❌ Failed to inject content script into tab ${tabId}`);
+      return;
+    }
+
+    // Then try to send the resume message
+    await sendResumeMessage(tabId, state);
+  });
 });
 
 // Clean up guide state when tabs are closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   const key = GUIDE_KEY(tabId);
   chrome.storage.local.remove(key);
-});
-
-// Log all incoming messages
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log(`📨 Received message: ${message.action}`, message);
-
-  // ─── Set or clear the prompt ────────────────────────────────────
-  if (message.action === "setPrompt") {
-    userPrompt = message.prompt;
-    console.log("✅ Prompt set:", userPrompt);
-    sendResponse({ success: true, prompt: userPrompt });
-    return true;
-  }
-
-  if (message.action === "clearPrompt") {
-    userPrompt = "";
-    console.log("✅ Prompt cleared");
-    sendResponse({ success: true });
-    return true;
-  }
-
-  // ─── Route messages to content script ──────────────────────────
-  if (message.action === "startGuide" || message.action === "stopGuide") {
-    // Get the active tab
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-      if (tabs.length === 0) {
-        sendResponse({ success: false, error: "No active tab found" });
-        return;
-      }
-
-      try {
-        // Send message to content script
-        const response = await chrome.tabs.sendMessage(tabs[0].id, message);
-        sendResponse(response);
-      } catch (error) {
-        console.error("❌ Error routing message to content script:", error);
-        sendResponse({ success: false, error: error.message });
-      }
-    });
-    return true; // Keep the message channel open for the async response
-  }
-
-  // ─── Analyze DOM for guidance ──────────────────────────────────
-  if (message.action === "analyzeDom") {
-    if (!userPrompt) {
-      sendError("No instructions provided. Please enter instructions first.");
-      sendResponse({ success: false, error: "No instructions provided" });
-      return true;
-    }
-
-    analyzeDomForGuidance(message.domSnapshot, sender, sendResponse);
-    return true; // Keep the message channel open for the async response
-  }
-
-  // ─── Get next step after completing current step ──────────────
-  if (message.action === "getNextStep") {
-    if (!userPrompt) {
-      sendError("No instructions provided. Please enter instructions first.");
-      sendResponse({ success: false, error: "No instructions provided" });
-      return true;
-    }
-
-    getNextStep(message.currentStep, message.domSnapshot, sender, sendResponse);
-    return true; // Keep the message channel open for the async response
-  }
-
-  // ─── Persist guide state ─────────────────────────────────────
-  if (message.action === "persistGuideState" && sender.tab?.id) {
-    console.log(`📥 Received guide state from tab ${sender.tab.id}`);
-    const key = GUIDE_KEY(sender.tab.id);
-    chrome.storage.local.set({ [key]: message.state });
-    // No response needed for state persistence
-    return false;
-  }
 });
 
 // Helper to send errors to both popup and content script
@@ -291,14 +340,21 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
         {
           role: "system",
           content:
-            "You are a DOM analysis expert that can help users navigate websites. " +
-            "Given a DOM snapshot and a user's goal, identify the most logical sequence of steps to achieve that goal. " +
-            "For each step, find the exact DOM element to interact with and provide its details. " +
-            "Focus only on UI elements that can be interacted with (buttons, links, input fields, dropdowns, etc.) " +
-            "Return ONLY a JSON array with this structure: " +
-            '[{"step": 1, "element": "Login Button", "action": "click", ' +
-            '"selector": "#login-btn", "xpath": "//button[@id=\'login-btn\']", ' +
-            '"text": "Log In", "description": "Click the login button"}]',
+            "You are an expert DOM analysis model specialized in generating highly precise and robust interaction sequences across diverse and dynamic web interfaces. " +
+            "You translate a DOM snapshot and a user's high-level objective into an exact, logically ordered set of actionable steps a user or automation can follow to complete that objective reliably. " +
+            "For each step, do the following: " +
+            "1) Identify all candidate interactive elements (buttons, links, input fields, dropdowns, checkboxes, radio buttons, textareas) that could advance the user's goal. " +
+            "2) Perform a probability analysis using your model confidence and DOM context to rank these candidates; select the element with the highest likelihood of being the correct next step. " +
+            "3) Determine the most stable, unique CSS selector for that chosen element, prioritizing in order: id attributes, data-* attributes, aria-label, name attributes, class names with enough specificity, then nth-of-type or attribute selectors, and as a last resort a full nested path. " +
+            "4) Provide the full XPath expression for the element. " +
+            "5) Extract the element's visible text, placeholder, or aria-label as the text field. " +
+            "6) If the element is inside a shadow DOM or iframe, include the appropriate shadow-host or iframe selector syntax in the CSS selector (e.g., 'shadow-host-selector >>> #element', 'iframe[name=\"login\"] #submit'). " +
+            "7) Ensure the selector matches exactly one element; if not, iteratively refine it until it does. " +
+            "8) If the element may load asynchronously, include in the description a note to wait for element to be visible." +
+            "9) Write a concise imperative description of the action (e.g., Click the login button, Enter text into the search input). " +
+            "Focus exclusively on interactive UI components. Do not include any non-interactive elements or commentary. " +
+            "Return ONLY a valid JSON array matching this exact structure: " +
+            '[{"step": 1, "element": "Login Button", "action": "click", "selector": "#login-btn", "xpath": "//button[@id=\'login-btn\']", "text": "Log In", "description": "Click the login button"}]',
         },
         {
           role: "user",
@@ -358,8 +414,8 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
         url: sender.tab.url,
         query: userPrompt,
         stepsOffered: steps.map((s) => ({
-          stepNumber: s.stepNumber,
-          chosen: s.chosen,
+          step: s.step,
+          chosen: s.chosen ?? false,
         })),
         timestamp: new Date().toISOString(),
       }),
@@ -376,92 +432,6 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
   } catch (err) {
     console.error("❌ Failed to analyze DOM:", err);
     sendError("Failed to analyze DOM", err.message);
-    sendResponse({ success: false, error: err.message });
-  }
-}
-
-async function getNextStep(currentStep, domSnapshot, sender, sendResponse) {
-  try {
-    console.log("🔄 Getting next step after step", currentStep);
-
-    // 1️⃣ Build the JSON payload for the AI
-    const payload = {
-      model: "gpt-4o-mini", // Use smaller model for this simpler task
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a DOM analysis expert that can help users navigate websites. " +
-            "Given a DOM snapshot and a user's goal, identify the most logical sequence of steps to achieve that goal. " +
-            "For each step, find the exact DOM element to interact with and provide its details. " +
-            "You MUST include ALL of these properties in each step of your response: " +
-            "- step: The step number (integer) " +
-            "- element: A descriptive name for the element " +
-            "- action: What action to take (click, type, select, hover, etc.) " +
-            "- selector: A CSS selector that uniquely identifies this element " +
-            "- xpath: An XPath that uniquely identifies this element " +
-            "- text: The text content of the element, if any " +
-            "- description: A brief description of what this step accomplishes " +
-            "Return your response as a JSON array with EXACTLY this structure, nothing more or less. " +
-            'Example: [{"step": 1, "element": "Login Button", "action": "click", ' +
-            '"selector": "#login-btn", "xpath": "//button[@id=\'login-btn\']", ' +
-            '"text": "Log In", "description": "Click the login button"}]',
-        },
-        {
-          role: "user",
-          content:
-            "My goal is: " +
-            userPrompt +
-            "\n\n" +
-            "I just completed step " +
-            currentStep +
-            ". What should I do next? \n\n" +
-            "Here is the current DOM: " +
-            domSnapshot,
-        },
-      ],
-    };
-
-    // 2️⃣ Send the request to OpenAI
-    console.log("🔄 Sending next step request to OpenAI...");
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    // 3️⃣ Check response
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`API error ${res.status}: ${text}`);
-    }
-
-    // 4️⃣ Parse the next step
-    const data = await res.json();
-    const assistantContent = data.choices[0].message.content;
-    // Clean up any code block formatting if present
-    const cleanContent = assistantContent
-      .replace(/```json\n/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    const nextStep = JSON.parse(cleanContent);
-    console.log("✅ Next step:", nextStep);
-
-    // 5️⃣ Send next step back to content script
-    if (sender?.tab?.id) {
-      chrome.tabs.sendMessage(sender.tab.id, {
-        action: "showNextStep",
-        step: nextStep,
-      });
-    }
-    sendResponse({ success: true, step: nextStep });
-  } catch (err) {
-    console.error("❌ Failed to get next step:", err);
-    sendError("Failed to get next step", err.message);
     sendResponse({ success: false, error: err.message });
   }
 }
