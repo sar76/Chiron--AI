@@ -133,6 +133,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case "startGuide":
+      // ← ensure analyzeDom sees our prompt
+      userPrompt = msg.prompt;
       // Get the active tab
       chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         if (tabs.length === 0) {
@@ -202,14 +204,119 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
 
     case "runCanvaPrompt":
+      (async () => {
+        try {
+          // Get API key from storage
+          const key = await new Promise((r) =>
+            chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey))
+          );
+          if (!key) {
+            sendResponse({ success: false, error: "No API key configured" });
+            return;
+          }
+
+          // Get the manual guides listing
+          const guides = await fetch(chrome.runtime.getURL("Canva.json"))
+            .then((res) => res.json())
+            .then((cfg) => cfg.manualGuides || [])
+            .catch(() => []);
+
+          const listing = guides
+            .map((g) => `- ${g.key}: ${g.intro}`)
+            .join("\n");
+
+          // Call OpenAI to classify the prompt
+          const res = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${key}`,
+              },
+              body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [
+                  {
+                    role: "system",
+                    content: `You are a classifier for Canva manual guides.\nAvailable guides:\n${listing}`,
+                  },
+                  {
+                    role: "user",
+                    content: `User request: "${msg.prompt}"\nRespond with the single best guide key exactly.`,
+                  },
+                ],
+                temperature: 0,
+              }),
+            }
+          );
+
+          if (!res.ok) {
+            throw new Error(`API error ${res.status}`);
+          }
+
+          const data = await res.json();
+          const guideKey = data.choices[0].message.content
+            .trim()
+            .replace(/^['"\s]+|['"\s]+$/g, "");
+
+          sendResponse({ success: true, key: guideKey });
+        } catch (err) {
+          console.error("❌ runCanvaPrompt failed:", err);
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+
     case "runCanvaTask":
-      // Forward Canva-related messages to the content script
       if (sender.tab?.id) {
         console.log(`📤 Forwarding ${msg.action} to tab ${sender.tab.id}`);
         chrome.tabs.sendMessage(sender.tab.id, msg, sendResponse);
-        return true; // Keep the message channel open for async response
+        return true;
       }
       break;
+
+    // ─── Forward the manual guide trigger ──────────────────
+    case "startManualGuide":
+      if (sender.tab?.id) {
+        console.log(`📤 Forwarding startManualGuide to tab ${sender.tab.id}`);
+        chrome.tabs.sendMessage(sender.tab.id, msg, sendResponse);
+        return true; // keep the port open for the async response
+      }
+      break;
+
+    case "fetchSuggestion":
+      (async () => {
+        try {
+          // get API key (either passed in or from storage)
+          const key =
+            msg.apiKey ||
+            (await new Promise((r) =>
+              chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey))
+            ));
+          // call OpenAI
+          const apiRes = await fetch("https://api.openai.com/v1/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              prompt: msg.prompt,
+              max_tokens: 64,
+              n: 3,
+            }),
+          }).then((r) => r.json());
+          const options = apiRes.choices.map((c) => c.text || "");
+          const inline = options[0] || "";
+          sendResponse({ success: true, inline, options });
+        } catch (err) {
+          console.error("❌ fetchSuggestion failed:", err);
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
   }
 });
 

@@ -14,6 +14,7 @@ let currentStepElement = null;
 let currentStepNumber = 0;
 let allSteps = [];
 let errorOverlay = null;
+let manualGuides = [];
 
 // Log when content script loads
 console.log("🔄 Content script loaded");
@@ -135,6 +136,14 @@ function showSuccessMessage(msg) {
   }, 3000);
 }
 
+// load guide data from Canva.json
+fetch(chrome.runtime.getURL("Canva.json"))
+  .then((res) => res.json())
+  .then((cfg) => {
+    manualGuides = cfg.manualGuides || [];
+  })
+  .catch((err) => console.error("Failed to load Canva.json:", err));
+
 // Main guidance dispatcher
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log(`📨 Content script received message: ${message.action}`);
@@ -201,7 +210,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Canva handlers removed - now handled by Canva.js
+  if (message.action === "startManualGuide") {
+    // This handler is now in Canva.js
+    return false;
+  }
 
   // Persist guide state to chrome.storage
   function persistGuideState(steps, currentIndex) {
@@ -369,4 +381,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     tour.start();
     persistGuideState(steps, 0);
   }
+
+  // If you have other actions, handle them here and return true.
+  // Otherwise let other listeners handle it:
+  return false;
 });

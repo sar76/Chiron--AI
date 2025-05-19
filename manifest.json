@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "DOM Guide Assistant",
+  "name": "ChironAI",
   "version": "1.0",
-  "description": "Creates step-by-step guided tours of websites using DOM analysis",
+  "description": "Creates step-by-step guided tours of websites and software, reducing the learning curve and increasing productivity.",
   "permissions": [
-    "tabs",
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -38,6 +38,11 @@
       "matches": ["https://*.canva.com/*"],
       "js": ["popup-injector.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.canva.com/*"],
+      "css": ["introjs.min.css"],
+      "js": ["content.js", "Canva.js"]
     }
   ],
   "action": {
@@ -53,12 +58,13 @@
         "libs/intro.min.js",
         "libs/introjs.min.css",
         "popup-injector.js",
-        "Canva.json"
+        "Canva.json",
+        "introjs.min.css"
       ],
       "matches": ["<all_urls>"]
     },
     {
-      "resources": ["Canva.json"],
+      "resources": ["Canva.json", "introjs.min.css"],
       "matches": ["https://*.canva.com/*"]
     }
   ],

@@ -12,302 +12,239 @@
   }
   console.log("✅ Running on Canva domain:", location.hostname);
 
-  // ★ Replace with your own key ★
-  const OPENAI_API_KEY =
-    "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";
+  let manualIntro = null;
+  let manualHost = null;
 
-  // Load and cache the task manifest JSON (Canva.json)
-  let CanvaTasks = null;
-  async function loadTasks() {
-    if (!CanvaTasks) {
-      const url = chrome.runtime.getURL("Canva.json");
-      console.log("📥 Fetching Canva.json from:", url);
-      const res = await fetch(url);
-      if (!res.ok) {
-        console.error("❌ Couldn't fetch Canva.json:", res.status);
-        throw new Error(`Failed to load task manifest: ${res.status}`);
-      }
-      CanvaTasks = await res.json();
-      console.log("✅ Loaded CanvaTasks:", CanvaTasks);
+  // ─── Inject Intro.js CSS (bundled or fall back to CDN) ─────────────
+  (function injectIntroCss() {
+    const introCss = document.createElement("link");
+    introCss.rel = "stylesheet";
+    introCss.href = chrome.runtime.getURL("introjs.min.css");
+    introCss.onerror = () => {
+      // fallback if local CSS isn't available
+      const cdn = document.createElement("link");
+      cdn.rel = "stylesheet";
+      cdn.href = "https://unpkg.com/intro.js/minified/introjs.min.css";
+      document.head.appendChild(cdn);
+    };
+    document.head.appendChild(introCss);
+  })();
+
+  // ─── Inject custom styles for tooltip & buttons ───────────
+  const customCss = document.createElement("style");
+  customCss.textContent = `
+    .introjs-tooltip {
+      background: #1e1e1e;    /* dark panel */
+      color: #ddd;           /* light text */
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      max-width: 300px;
     }
-    return CanvaTasks;
-  }
-
-  // Parse freeform user prompt into a task key
-  async function parseUserPrompt(promptText) {
-    console.log("🔍 Parsing user prompt:", promptText);
-    const { tasks } = await loadTasks();
-    const listing = tasks.map((t) => `- ${t.key}: ${t.description}`).join("\n");
-    const systemPrompt = `You are a classifier for Canva automation tasks.\nAvailable tasks:\n${listing}`;
-    const userPrompt = `User request: "${promptText}"\nRespond with the single best task key exactly.`;
-
-    console.log("🤖 Sending to OpenAI:", { systemPrompt, userPrompt });
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0,
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("❌ OpenAI parse error:", err);
-      throw new Error(`OpenAI parse error ${response.status}: ${err}`);
+    .introjs-tooltipbuttons {
+      margin-top: 8px;
+      text-align: right;
     }
-
-    const data = await response.json();
-    const key = data.choices[0].message.content
-      .trim()
-      .replace(/^['"\s]+|['"\s]+$/g, "");
-    console.log("🔑 OpenAI chose key:", key);
-    return key;
-  }
-
-  // Apply instruction by dispatching real mouse events
-  function applyInstruction(instruction) {
-    console.log("🎨 Applying instruction:", instruction);
-    const { selectors, action = "click" } = instruction;
-
-    // Find the first matching element
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (!el) {
-        console.log("⚠️ No element found for selector:", sel);
-        continue;
-      }
-
-      console.log("✅ Found element:", sel);
-
-      if (action === "click") {
-        // Simulate a real user click with both PointerEvent and MouseEvent
-        el.focus();
-        // Dispatch both PointerEvent and MouseEvent to satisfy all layers
-        ["pointerdown", "pointerup", "mousedown", "mouseup"].forEach((type) =>
-          el.dispatchEvent(
-            new PointerEvent(type, {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              view: window,
-            })
-          )
-        );
-        // Invoke the native click method, which React will always see
-        el.click();
-        console.log("🖱️ Real click() invoked on", el);
-        return true;
-      }
-
-      if (action === "sequence") {
-        // Same pattern on the second selector
-        console.log("🔄 Starting sequence click");
-        el.focus();
-        ["pointerdown", "pointerup", "mousedown", "mouseup"].forEach((type) =>
-          el.dispatchEvent(
-            new PointerEvent(type, {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              view: window,
-            })
-          )
-        );
-        el.click();
-        setTimeout(() => {
-          const next = document.querySelector(instruction.selectors[1]);
-          if (next) {
-            console.log("🖱️ Clicking next element in sequence");
-            next.focus();
-            ["pointerdown", "pointerup", "mousedown", "mouseup"].forEach(
-              (type) =>
-                next.dispatchEvent(
-                  new PointerEvent(type, {
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true,
-                    view: window,
-                  })
-                )
-            );
-            next.click();
-          } else {
-            console.warn("⚠️ No element found for second selector in sequence");
-          }
-        }, 200);
-        return true;
-      }
+    .introjs-nextbutton, .introjs-donebutton {
+      background: #0e639c;   /* match your "Go" button */
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .introjs-helperLayer {
+      background-color: rgba(0,0,0,0.4) !important;
+    }
+    /* make the highlight pop */
+    .introjs-red-highlight {
+      box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.6) !important;
+    }
+    /* Let Intro.js tooltips & buttons catch clicks */
+    #chiron-intro-host {
+      pointer-events: none !important;
+    }
+    .introjs-tooltip,
+    .introjs-tooltip * {
+      pointer-events: auto !important;
+    }
+    /* make space at bottom of tooltip for our hint */
+    .chiron-tooltip {
+      position: relative;
+      padding-bottom: 28px;    /* room for the hint */
     }
 
-    console.warn("⚠️ No element matched selectors:", selectors);
-    return false;
-  }
-
-  // High-level: perform by key using static task manifest
-  async function performCanvaTask(key, params = {}) {
-    try {
-      const { tasks } = await loadTasks();
-      const task = tasks.find((t) => t.key === key);
-      if (!task) {
-        console.error("❌ Unknown task key:", key);
-        throw new Error(`Unknown task key: ${key}`);
-      }
-      // task.selectors and task.action come straight from Canva.json
-      return applyInstruction({
-        selectors: task.selectors,
-        action: task.action,
-      });
-    } catch (e) {
-      console.error("❌ performCanvaTask error:", e);
-      return false;
+    /* style and position the hint */
+    .chiron-tooltip .esc-hint {
+      position: absolute;
+      bottom: 8px;             /* 8px up from tooltip's bottom edge */
+      left: 0; right: 0;       /* full width */
+      text-align: center;      /* center the text */
+      font-size: 12px;         /* smaller than body text */
+      color: #aaa;             /* slightly muted */
+      pointer-events: none;    /* don't intercept clicks */
     }
-  }
+  `;
+  document.head.appendChild(customCss);
 
-  // Expose the API
-  const api = {
-    async runCanvaPrompt(prompt, params = {}) {
-      const key = await parseUserPrompt(prompt);
-      const success = await performCanvaTask(key, params);
-      return [key, params];
-    },
-    async runCanvaTask(key, params = {}) {
-      return performCanvaTask(key, params);
-    },
-  };
+  // Load only manualGuides from JSON
+  let manualGuides = [];
+  fetch(chrome.runtime.getURL("Canva.json"))
+    .then((res) => res.json())
+    .then((cfg) => {
+      manualGuides = cfg.manualGuides || [];
+    })
+    .catch((err) => console.error("Failed to load Canva.json:", err));
 
-  // Wire up the message listener
+  // Handle messages
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    console.log("📥 Received message in Canva.js:", msg);
+    if (msg.action === "startManualGuide") {
+      console.log("▶️ startManualGuide for key:", msg.key);
+      const guide = manualGuides.find((g) => g.key === msg.key);
+      if (!guide) {
+        console.error("❌ No guide defined for", msg.key);
+        sendResponse({ success: false, error: "No guide defined" });
+        return true;
+      }
 
-    if (msg.action === "runCanvaPrompt") {
-      api
-        .runCanvaPrompt(msg.prompt, msg.params)
-        .then(([key, params]) => {
-          console.log("✅ runCanvaPrompt completed:", { key, params });
-          sendResponse({ success: true, key, params });
-        })
-        .catch((err) => {
-          console.error("❌ runCanvaPrompt failed:", err);
-          sendResponse({ success: false, error: err.message });
-        });
-      return true; // Keep the message channel open
+      // pick the first step's selector as our entry point
+      const first =
+        guide.steps && guide.steps.length
+          ? guide.steps[0]
+          : {
+              selector: guide.selector,
+              intro: guide.intro,
+              position: guide.position,
+            };
+      let el = null;
+      for (const sel of first.selector.split(",").map((s) => s.trim())) {
+        el = document.querySelector(sel);
+        if (el) break;
+      }
+      if (!el) {
+        console.error("❌ Element not found for selector:", first.selector);
+        sendResponse({ success: false, error: "Element not found" });
+        return true;
+      }
+
+      // Create a top-level host with a super-high z-index
+      manualHost = document.createElement("div");
+      manualHost.id = "chiron-intro-host";
+      Object.assign(manualHost.style, {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none", // let clicks pass through to Intro.js
+        zIndex: String(2 ** 31 - 1),
+      });
+      document.body.appendChild(manualHost);
+
+      // Make host focusable and give it focus
+      manualHost.tabIndex = -1;
+      manualHost.focus();
+
+      // create a permanent Intro.js instance
+      manualIntro = introJs();
+
+      // build step array (uses guide.steps if present, otherwise fall back)
+      const raw = guide.steps || [first];
+
+      const steps = raw.map((s) => {
+        let element = null;
+        for (const sel of s.selector.split(",").map((x) => x.trim())) {
+          element = document.querySelector(sel);
+          if (element) break;
+        }
+        return {
+          element,
+          intro: `${s.intro}<div class="esc-hint">Press Esc to exit</div>`,
+          position: s.position,
+        };
+      });
+      manualIntro.setOptions({
+        steps,
+        showBullets: false,
+        showButtons: raw.length > 1, // only show Next/Finish when there's more than one step
+        showStepNumbers: false,
+        nextLabel: "Next", // clearer than "OK"
+        doneLabel: "Finish",
+        exitOnOverlayClick: false,
+        disableInteraction: true, // prevent page clicks from breaking the tour
+        scrollToElement: true,
+        autoRefresh: true,
+        tooltipClass: "chiron-tooltip",
+        highlightClass: "introjs-red-highlight",
+        exitOnEsc: true,
+      });
+
+      // Listen for Escape key to exit the guide
+      const escListener = (e) => {
+        if (e.key === "Escape") {
+          manualIntro.exit();
+        }
+      };
+      document.addEventListener("keydown", escListener);
+
+      // only refresh if the tour is active, and remove listeners on exit
+      const refreshListener = () => {
+        if (manualIntro) manualIntro.refresh();
+      };
+      window.addEventListener("resize", refreshListener);
+      window.addEventListener("scroll", refreshListener);
+
+      // start the guide
+      manualIntro.start();
+
+      manualIntro.onexit(() => {
+        window.removeEventListener("resize", refreshListener);
+        window.removeEventListener("scroll", refreshListener);
+        document.removeEventListener("keydown", escListener);
+        chrome.runtime.sendMessage({ action: "manualGuideExited" });
+
+        // ← fully tear down the host so Esc actually frees your UI
+        if (manualHost && manualHost.parentNode) {
+          manualHost.remove();
+          manualHost = null;
+        }
+        manualIntro = null;
+      });
+      manualIntro.oncomplete(() => {
+        window.removeEventListener("resize", refreshListener);
+        window.removeEventListener("scroll", refreshListener);
+        document.removeEventListener("keydown", escListener);
+        chrome.runtime.sendMessage({ action: "manualGuideExited" });
+
+        if (manualHost && manualHost.parentNode) {
+          manualHost.remove();
+          manualHost = null;
+        }
+        manualIntro = null;
+      });
+      sendResponse({ success: true });
+      return true;
     }
 
-    if (msg.action === "runCanvaTask") {
-      // ─── TEXT-FORMAT SPECIALS ──────────────────────────────
-      if (msg.key === "boldText" || msg.key === "italicText") {
-        // 1. Ensure there is a text selection
-        const sel = window.getSelection();
-        if (!sel.rangeCount || !sel.toString().trim()) {
-          console.warn("⚠️ No text selected");
-          sendResponse({ success: false, error: "No text selected" });
-          return true;
-        }
-
-        // 2. Apply formatting via execCommand
+    // ─── Listen for stopGuide and tear down the manual guide ────────────
+    if (msg.action === "stopGuide") {
+      console.log("📢 Canva.js got stopGuide ➞ exiting manual guide");
+      if (manualIntro) {
         try {
-          const command = msg.key === "boldText" ? "bold" : "italic";
-          console.log("🎨 Applying format:", command);
-
-          // Try in main document first
-          document.execCommand(command);
-
-          // If that didn't work, try in any iframes
-          const iframes = document.querySelectorAll("iframe");
-          for (const iframe of iframes) {
-            try {
-              iframe.contentDocument.execCommand(command);
-            } catch (e) {
-              console.log("⚠️ Could not execute command in iframe:", e);
-            }
-          }
-
-          console.log("✅ Format applied successfully");
-          sendResponse({ success: true });
-        } catch (err) {
-          console.error("❌ Error applying format:", err);
-          sendResponse({ success: false, error: err.message });
-        }
-        return true;
+          manualIntro.exit();
+        } catch {}
+        manualIntro = null;
       }
-
-      // ─── ALIGN SPECIAL CASE ────────────────────────────────
-      if (["alignLeft", "alignCenter", "alignRight"].includes(msg.key)) {
-        const btn = document.querySelector(
-          "button[aria-label^='Toggle text alignment, current alignment:']"
-        );
-        if (!btn) {
-          console.error("⚠️ Align button not found");
-          sendResponse({ success: false, error: "No align control" });
-          return true;
-        }
-
-        // parse current alignment
-        const label = btn.getAttribute("aria-label");
-        const m = /current alignment:\s*(\w+)/i.exec(label);
-        const current = m ? m[1] : null;
-        const desired =
-          msg.key === "alignLeft"
-            ? "Left"
-            : msg.key === "alignCenter"
-            ? "Center"
-            : "Right";
-        const order = ["Left", "Center", "Right"];
-        const idxCur = order.indexOf(current);
-        const idxDes = order.indexOf(desired);
-        // how many presses?
-        const presses =
-          idxCur >= 0
-            ? (idxDes - idxCur + order.length) % order.length
-            : idxDes + 1;
-
-        console.log("🎨 Aligning text:", {
-          current,
-          desired,
-          presses,
-          label,
-        });
-
-        // simulated clicks
-        for (let i = 0; i < presses; i++) {
-          ["pointerdown", "pointerup", "mousedown", "mouseup"].forEach((t) =>
-            btn.dispatchEvent(
-              new PointerEvent(t, {
-                bubbles: true,
-                cancelable: true,
-                composed: true,
-                view: window,
-              })
-            )
-          );
-          btn.click();
-        }
-
-        sendResponse({ success: true });
-        return true;
+      if (manualHost && manualHost.parentNode) {
+        manualHost.remove();
+        manualHost = null;
       }
-
-      // ─── FALLBACK TO GENERIC TASKS ─────────────────────────
-      api
-        .runCanvaTask(msg.key, msg.params)
-        .then((success) => {
-          console.log("✅ runCanvaTask completed:", success);
-          sendResponse({ success, key: msg.key });
-        })
-        .catch((err) => {
-          console.error("❌ runCanvaTask failed:", err);
-          sendResponse({ success: false, error: err.message });
-        });
-      return true; // Keep the message channel open
+      sendResponse({ success: true });
+      return true;
     }
+
+    return false;
   });
 })();
