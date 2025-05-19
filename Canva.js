@@ -28,11 +28,26 @@
       document.head.appendChild(cdn);
     };
     document.head.appendChild(introCss);
+
+    // Load the auto-positioning plugin into the Canva page
+    const autoPos = document.createElement("script");
+    autoPos.src = chrome.runtime.getURL("introjs-auto-positioning.js");
+    document.head.appendChild(autoPos);
   })();
 
   // ─── Inject custom styles for tooltip & buttons ───────────
   const customCss = document.createElement("style");
   customCss.textContent = `
+    /* Allow clicks to pass through the overlay hole to the real page element */
+    .introjs-helperLayer {
+      pointer-events: none !important;
+      background-color: rgba(0,0,0,0.4) !important;
+    }
+    /* If you see a separate overlay class, you can add that too */
+    .introjs-overlay {
+      pointer-events: none !important;
+    }
+
     .introjs-tooltip {
       background: #1e1e1e;    /* dark panel */
       color: #ddd;           /* light text */
@@ -40,7 +55,15 @@
       padding: 12px 16px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       font-family: "Helvetica Neue", Arial, sans-serif;
-      max-width: 300px;
+
+      /* force a constant width, but still clamp on tiny viewports */
+      width: 280px !important;
+      max-width: calc(100vw - 40px) !important;
+      box-sizing: border-box !important;
+      white-space: normal !important;   /* wrap long lines */
+      position: absolute !important;    /* let Intro.js position relative to target */
+      max-height: calc(100vh - 40px) !important;/* never taller than viewport–40px */
+      overflow-wrap: break-word !important;     /* wrap long words */
     }
     .introjs-tooltipbuttons {
       margin-top: 8px;
@@ -54,9 +77,6 @@
       padding: 6px 12px;
       font-size: 14px;
       cursor: pointer;
-    }
-    .introjs-helperLayer {
-      background-color: rgba(0,0,0,0.4) !important;
     }
     /* make the highlight pop */
     .introjs-red-highlight {
@@ -153,32 +173,78 @@
       // build step array (uses guide.steps if present, otherwise fall back)
       const raw = guide.steps || [first];
 
+      // Constants for tooltip positioning
+      const TOOLTIP_WIDTH = 280;
+      const HORIZONTAL_MARGIN = 20;
+
+      // Add dynamic position adjustment for older Intro.js versions
       const steps = raw.map((s) => {
         let element = null;
         for (const sel of s.selector.split(",").map((x) => x.trim())) {
           element = document.querySelector(sel);
           if (element) break;
         }
+
+        // If we found the element, check its position for dynamic adjustment
+        if (element) {
+          const rect = element.getBoundingClientRect();
+
+          // if there's not enough room on the right → show on left
+          if (
+            rect.right + TOOLTIP_WIDTH + HORIZONTAL_MARGIN >
+            window.innerWidth
+          ) {
+            s.position = "left";
+          }
+          // if there's not enough room on the left → show on right
+          else if (rect.left - TOOLTIP_WIDTH - HORIZONTAL_MARGIN < 0) {
+            s.position = "right";
+          }
+          // otherwise let Intro.js pick top/bottom or your "auto"
+          else {
+            s.position = "auto";
+          }
+        }
+
         return {
           element,
           intro: `${s.intro}<div class="esc-hint">Press Esc to exit</div>`,
           position: s.position,
+          // only hide buttons when we're waiting for a click
+          showButtons: !s.waitFor,
         };
       });
+
       manualIntro.setOptions({
         steps,
         showBullets: false,
-        showButtons: raw.length > 1, // only show Next/Finish when there's more than one step
-        showStepNumbers: false,
+        showButtons: true, // enable buttons by default
+        showStepNumbers: true,
         nextLabel: "Next", // clearer than "OK"
         doneLabel: "Finish",
         exitOnOverlayClick: false,
-        disableInteraction: true, // prevent page clicks from breaking the tour
+        disableInteraction: false, // allow clicks on highlighted elements
         scrollToElement: true,
         autoRefresh: true,
         tooltipClass: "chiron-tooltip",
         highlightClass: "introjs-red-highlight",
         exitOnEsc: true,
+        keyboardNavigation: false, // disable keyboard nav since we're click-based
+      });
+
+      // Listen for step changes to handle click-based progression
+      manualIntro.onafterchange((targetEl) => {
+        const stepIdx = manualIntro._currentStep;
+        const stepDef = raw[stepIdx];
+
+        // if this step says "waitFor: click", wire up a one-time click → nextStep
+        if (stepDef.waitFor === "click" && targetEl) {
+          const onClick = () => {
+            targetEl.removeEventListener("click", onClick);
+            manualIntro.nextStep();
+          };
+          targetEl.addEventListener("click", onClick, { once: true });
+        }
       });
 
       // Listen for Escape key to exit the guide

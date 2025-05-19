@@ -6,12 +6,12 @@
         {
           "selector": "button[aria-label='Bold'], button[data-testid='text-bold-button']",
           "intro":    "First, select (highlight) the text you want to bold.",
-          "position": "bottom"
+          "position": "auto"
         },
         {
           "selector": "button[aria-label='Bold'], button[data-testid='text-bold-button']",
           "intro":    "Now click this B button to apply bold styling.",
-          "position": "bottom"
+          "position": "auto"
         }
       ]
     },
@@ -21,12 +21,12 @@
         {
           "selector": "button[aria-label='Italics']",
           "intro":    "First, select (highlight) the text you want to italicize.",
-          "position": "bottom"
+          "position": "auto"
         },
         {
           "selector": "button[aria-label='Italics']",
           "intro":    "Now click this I button to apply italic styling.",
-          "position": "bottom"
+          "position": "auto"
         }
       ]
     },
@@ -36,12 +36,12 @@
         {
           "selector": "button[aria-label='Apply heading']",
           "intro":    "Click the text style button to open the style menu.",
-          "position": "bottom"
+          "position": "auto"
         },
         {
           "selector": "button[aria-label='Apply heading']",
           "intro":    "Select Heading 1 to make your text a main heading.",
-          "position": "right"
+          "position": "auto"
         }
       ]
     },
@@ -51,12 +51,12 @@
         {
           "selector": "button[aria-label='Apply subheading']",
           "intro":    "Click the text style button to open the style menu.",
-          "position": "bottom"
+          "position": "auto"
         },
         {
           "selector": "button[aria-label='Apply subheading']",
           "intro":    "Select Subheading to make your text a secondary heading.",
-          "position": "right"
+          "position": "auto"
         }
       ]
     },
@@ -66,12 +66,12 @@
         {
           "selector": "button[aria-label='List']",
           "intro":    "First, select the text you want to convert to a list.",
-          "position": "bottom"
+          "position": "auto"
         },
         {
           "selector": "button[aria-label='List']",
           "intro":    "Now click this list button to create bullet points.",
-          "position": "bottom"
+          "position": "auto"
         }
       ]
     },
@@ -81,15 +81,301 @@
         {
           "selector": "button[aria-label^='Toggle text alignment']",
           "intro":    "First, select the text you want to align.",
-          "position": "bottom"
+          "position": "auto"
         },
         {
           "selector": "button[aria-label^='Toggle text alignment']",
           "intro":    "Click this button to cycle through left, center, and right alignment.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "fontStyle",
+      "steps": [
+        {
+          "selector": "button[aria-label^=\"Toggle font selector, current font\"]",
+          "intro": "First, select (highlight) the text you want to change the font for.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label^=\"Toggle font selector, current font\"]",
+          "intro": "Now click this button to open the font selector dropdown and choose your new font style.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "fontSize",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Font size\"]",
+          "intro": "Click this button to open the font size input field.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Decrease font size\"]",
+          "intro": "Click this button to decrease the font size.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Increase font size\"]",
+          "intro": "Click this button to increase the font size.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "textColor",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Text color\"]",
+          "intro": "First, select (highlight) the text you want to change color for.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Text color\"]",
+          "intro": "Then click this button to open the color picker and choose your desired hue — or just start typing and it will apply in that color.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "highlightColor",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Highlight color\"]",
+          "intro": "First, select (highlight) the text you want to apply a background color to.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Highlight color\"]",
+          "intro": "Then click this button to open the highlight color picker and choose your desired color — or just start typing and it will apply that highlight automatically.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "lineSpacing",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Spacing\"]",
+          "intro": "First, select (highlight) the text you want to adjust line spacing for.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Spacing\"]",
+          "intro": "Then click this button to open the line spacing menu and choose your desired spacing.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "increaseIndent",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Increase indent\"]",
+          "intro": "First, select (highlight) the text you want to indent.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Increase indent\"]",
+          "intro": "Then click this button to increase the indentation of your selected text.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "underline",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Underline\"]",
+          "intro": "First, select (highlight) the text you want to underline.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Underline\"]",
+          "intro": "Then click this button to apply underline to your selected text — or just start typing and it will appear underlined.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "strikethrough",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Strikethrough\"]",
+          "intro": "First, select (highlight) the text you want to strike through.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Strikethrough\"]",
+          "intro": "Then click this button to apply strikethrough to your selected text — or just start typing and it will appear with a line through it.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "advancedFormatting",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Advanced formatting\"]",
+          "intro": "First, select (highlight) the text you want to convert to subscript, superscript, or another advanced format.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Advanced formatting\"]",
+          "intro": "Then click this button to open the advanced formatting menu and choose Subscript, Superscript, or any other option.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "decreaseIndent",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Decrease indent\"]",
+          "intro": "First, select (highlight) the text you want to remove indentation from.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Decrease indent\"]",
+          "intro": "Then click this button to decrease the indentation of your selected text.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "copyStyle",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Copy style\"]",
+          "intro": "First, select (highlight) the text or element whose formatting you want to copy.",
+          "position": "auto"
+        },
+        {
+          "selector": "button[aria-label=\"Copy style\"]",
+          "intro": "Then click this button to copy all of its formatting—font, color, spacing, etc.—so you can paste the exact same style elsewhere.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "shareExport",
+      "steps": [
+        {
+          "selector": "path[d^=\"M4.5 11.75\"]",
+          "intro": "Click the 'Share' text in the top-right corner to open the Share & Export menu and choose how you'd like to share or download your design.",
+          "position": "auto"
+        }
+      ]
+    },
+    {
+      "key": "viewComments",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"View all comments\"]",
+          "intro": "Click this button to open the comments panel—where you can view every comment and type your own to add it.",
+          "position": "left"
+        }
+      ]
+    },
+    {
+      "key": "analytics",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Analytics\"]",
+          "intro": "Click this button to open the analytics panel and view performance metrics for your design.",
+          "position": "left"
+        }
+      ]
+    },
+    {
+      "key": "addCollaborator",
+      "steps": [
+        {
+          "selector": "button.V_p1oA.Z3nT2A",
+          "intro": "Click this button to open the collaborator panel, where you can invite others to edit or view your design.",
+          "position": "left"
+        }
+      ]
+    },
+    {
+      "key": "changeTitle",
+      "steps": [
+        {
+          "selector": "input[aria-label=\"Design title\"]",
+          "intro": "Click this field to select the current title of your design.",
           "position": "bottom"
+        },
+        {
+          "selector": "input[aria-label=\"Design title\"]",
+          "intro": "Then type your new title and press Enter (or click outside) to save it.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "redo",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Redo\"]",
+          "intro": "Click this button to redo your last action.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "undo",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Undo\"]",
+          "intro": "Click this button to undo your last action.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "viewMode",
+      "steps": [
+        {
+          "selector": "button.MCgm0w.unS_Qw.XWi4sQ",
+          "intro": "Click this button to open the view mode menu (Editing, Viewing, Suggesting, or Commenting) for your document.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "uploadFile",
+      "steps": [
+        {
+          "selector": "button[role='menuitem'][aria-controls='header_item6']",
+          "intro": "Click the File menu in the top-left corner to open file actions.",
+          "position": "bottom",
+          "waitFor": "click"
+        },
+        {
+          "selector": "button.PuABGQ.FQ64gg.uMo6Kw",
+          "intro": "Now click \"Upload files\" to bring in a new image, video, or asset.",
+          "position": "right"
+        }
+      ]
+    },
+    {
+      "key": "openSettings",
+      "steps": [
+        {
+          "selector": "button[role='menuitem'][aria-controls='header_item6']",
+          "intro": "Click the File menu in the top-left corner to open file actions.",
+          "position": "bottom",
+          "waitFor": "click"
+        },
+        {
+          "selector": "button[id=\":r9r:\"]",
+          "intro": "Now click \"Settings\" to adjust your preferences (autosave, theme, etc.).",
+          "position": "right"
         }
       ]
     }
   ]
 }
-  

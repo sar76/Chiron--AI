@@ -317,6 +317,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
       })();
       return true;
+
+    case "manualGuideExited":
+      // push the same message back into the tab so popup-injector.js can catch it
+      if (sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, { action: "manualGuideExited" });
+      }
+      break;
   }
 });
 
