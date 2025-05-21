@@ -228,6 +228,46 @@
     border-radius: 4px;
     cursor: pointer;
   }
+
+  /* Automation options panel */
+  #chiron-popup #automationOptions {
+    display: none;
+    margin-top: 12px;
+    padding: 12px;
+    background: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+  }
+
+  #chiron-popup #automationOptions .automation-btn {
+    background: #0e639c;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 4px;
+    font-size: 13px;
+  }
+
+  #chiron-popup #automationOptions .automation-btn:hover {
+    background: #1177bb;
+  }
+
+  #chiron-popup #automationOptions .automation-retry-btn {
+    background: #6c5ce7;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 4px;
+    font-size: 13px;
+  }
+
+  #chiron-popup #automationOptions .automation-retry-btn:hover {
+    background: #7d6ff0;
+  }
   `;
   const styleEl = document.createElement("style");
   styleEl.textContent = css;
@@ -249,6 +289,11 @@
             <input type="text" id="userPrompt" placeholder="Type your instruction…" autocomplete="off"/>
           </div>
           <div class="status" id="statusMessage">Ready to guide you.</div>
+          <div id="automationOptions">
+            <button id="manualBtn" class="automation-btn">Run Guide</button>
+            <button id="autoBtn" class="automation-btn">Automate Task</button>
+            <button id="retryBtn" class="automation-retry-btn">Not what you're looking for? Try searching again</button>
+          </div>
           <div class="controls">
             <button id="stop" disabled>Stop</button>
             <button id="start" disabled>Go</button>
@@ -276,6 +321,10 @@
   const stopBtnEl = document.getElementById("stop");
   const statusEl = document.getElementById("statusMessage");
   const historyEl = document.getElementById("history");
+  const automationOptions = document.getElementById("automationOptions");
+  const manualBtn = document.getElementById("manualBtn");
+  const autoBtn = document.getElementById("autoBtn");
+  const retryBtn = document.getElementById("retryBtn");
   const openSettingsEl = document.getElementById("openSettings");
   const settingsEl = document.getElementById("settingsDrawer");
   const apiKeyInputEl = document.getElementById("apiKeyInput");
@@ -300,6 +349,7 @@
 
     statusEl.textContent = "⏳ Processing...";
     startBtnEl.disabled = true;
+    automationOptions.style.display = "none";
 
     try {
       if (location.hostname.includes("canva.com")) {
@@ -312,21 +362,52 @@
         );
         if (!success) throw new Error(error || "No guide found");
 
-        // 2) Ask user Manual vs. Auto
-        const doAuto = confirm(
-          `Found guide "${key}". Do you want me to perform it automatically?`
-        );
-        if (doAuto) {
-          await new Promise((r) =>
-            chrome.runtime.sendMessage({ action: "runCanvaTask", key }, r)
-          );
-          statusEl.textContent = `✅ Automated "${key}"`;
-        } else {
-          await new Promise((r) =>
-            chrome.runtime.sendMessage({ action: "startManualGuide", key }, r)
-          );
-          statusEl.textContent = `✅ Manual guide "${key}" started`;
-        }
+        // 2) Show automation options
+        statusEl.textContent = `✨ Found guide "${key}". Choose how to proceed:`;
+        automationOptions.style.display = "block";
+
+        // Wire up the buttons
+        manualBtn.onclick = async () => {
+          try {
+            statusEl.textContent = "🔄 Starting manual guide...";
+            automationOptions.style.display = "none";
+
+            await new Promise((r) =>
+              chrome.runtime.sendMessage({ action: "startManualGuide", key }, r)
+            );
+
+            statusEl.textContent = `✅ Manual guide "${key}" started`;
+            closePopup();
+          } catch (err) {
+            console.error("Error starting manual guide:", err);
+            statusEl.textContent = `❌ ${err.message}`;
+            resetUI();
+          }
+        };
+
+        autoBtn.onclick = async () => {
+          try {
+            statusEl.textContent = "🤖 Starting automation...";
+            automationOptions.style.display = "none";
+
+            await new Promise((r) =>
+              chrome.runtime.sendMessage({ action: "runCanvaTask", key }, r)
+            );
+
+            statusEl.textContent = `✅ Automated "${key}"`;
+            closePopup();
+          } catch (err) {
+            console.error("Error starting automation:", err);
+            statusEl.textContent = `❌ ${err.message}`;
+            resetUI();
+          }
+        };
+
+        retryBtn.onclick = () => {
+          statusEl.textContent = "Ready to guide you.";
+          automationOptions.style.display = "none";
+          resetUI();
+        };
       } else {
         // —— Default AI guide path ——
         appendHistory("You", promptText);
@@ -416,5 +497,12 @@
         );
       })
     );
+  }
+
+  function resetUI() {
+    promptInput.disabled = false;
+    promptInput.value = "";
+    startBtnEl.disabled = true;
+    stopBtnEl.disabled = true;
   }
 })();
