@@ -1,407 +1,420 @@
 // popup-injector.js
 (function () {
-  // Check if the popup already exists
   if (document.getElementById("chiron-popup")) {
-    // Remove existing popup
-    const existingPopup = document.getElementById("chiron-popup");
-    const existingStyles = document.getElementById("chiron-popup-styles");
-    if (existingPopup) existingPopup.remove();
-    if (existingStyles) existingStyles.remove();
+    console.log("⚠️ Chiron popup already present");
     return;
   }
 
-  // Layout containing styles and HTML template for the popup
-  const layout = {
-    styles: `
-            @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
-            
-            .chiron-popup {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                width: 380px;
-                background: linear-gradient(135deg, rgba(116, 185, 255, 0.95) 0%, rgba(162, 155, 254, 0.95) 50%, rgba(253, 121, 168, 0.95) 100%);
-                border-radius: 25px;
-                box-shadow: 0 8px 32px rgba(31, 38, 135, 0.25);
-                border: 2px solid rgba(255, 255, 255, 0.5);
-                backdrop-filter: blur(10px);
-                z-index: 2147483647;
-                font-family: 'Nunito', sans-serif;
-                color: #2d3436;
-                animation: chiron-slideIn 0.3s ease-out;
-                overflow: hidden;
-            }
-            
-            @keyframes chiron-slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            
-            @keyframes chiron-slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-            
-            .chiron-popup.closing {
-                animation: chiron-slideOut 0.3s ease-in;
-            }
-            
-            .chiron-popup .container {
-                padding: 1.5rem;
-                min-height: 280px;
-                animation: chiron-float 6s ease-in-out infinite;
-            }
-            
-            @keyframes chiron-float {
-                0% { transform: translateY(0px); }
-                50% { transform: translateY(-10px); }
-                100% { transform: translateY(0px); }
-            }
-            
-            .chiron-popup h1 {
-                margin: 0 0 1.5rem;
-                font-size: 2rem;
-                text-align: center;
-                color: #ffffff;
-                font-weight: 800;
-                letter-spacing: 1px;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-                position: relative;
-            }
-            
-            .chiron-popup h1::after {
-                content: '✨';
-                position: absolute;
-                right: -5px;
-                top: -5px;
-                font-size: 1.2rem;
-                animation: chiron-sparkle 2s infinite;
-            }
-            
-            @keyframes chiron-sparkle {
-                0%, 100% { opacity: 0.3; transform: scale(0.8); }
-                50% { opacity: 1; transform: scale(1.2); }
-            }
-            
-            .chiron-popup .form-group {
-                display: flex;
-                gap: 0.5rem;
-                margin-bottom: 0.9rem;
-            }
-            
-            .chiron-popup input[type="text"] {
-                flex: 1;
-                padding: 0.875rem 1.25rem;
-                font-size: 1.1rem;
-                border: 2px solid rgba(255, 255, 255, 0.6);
-                border-radius: 15px;
-                background-color: rgba(255, 255, 255, 0.9);
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                font-family: inherit;
-                color: #2d3436;
-            }
-            
-            .chiron-popup input[type="text"]:focus {
-                outline: none;
-                border-color: #ffffff;
-                box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3), 0 6px 12px rgba(0, 0, 0, 0.15);
-                transform: translateY(-2px);
-            }
-            
-            .chiron-popup input[type="text"]::placeholder {
-                color: #6c5ce7;
-                opacity: 0.8;
-            }
-            
-            .chiron-popup button {
-                padding: 0.875rem 1.5rem;
-                font-size: 1.1rem;
-                border: none;
-                border-radius: 15px;
-                cursor: pointer;
-                font-weight: 700;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                font-family: inherit;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .chiron-popup button::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-                transition: 0.5s;
-            }
-            
-            .chiron-popup button:hover::before {
-                left: 100%;
-            }
-            
-            .chiron-popup #start {
-                background: linear-gradient(45deg, #55efc4, #00b894);
-                color: #fff;
-                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-            }
-            
-            .chiron-popup #start:disabled {
-                background: linear-gradient(45deg, #b2bec3, #95a5a6);
-                cursor: not-allowed;
-                opacity: 0.8;
-                box-shadow: none;
-            }
-            
-            .chiron-popup #start:not(:disabled):hover {
-                transform: translateY(-3px) scale(1.02);
-                box-shadow: 0 6px 12px rgba(0, 184, 148, 0.3);
-            }
-            
-            .chiron-popup .button-group {
-                display: flex;
-                justify-content: center;
-            }
-            
-            .chiron-popup #stop {
-                background: linear-gradient(45deg, #ff7675, #d63031);
-                color: #fff;
-                width: 100%;
-                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-            }
-            
-            .chiron-popup #stop:hover {
-                transform: translateY(-3px) scale(1.02);
-                box-shadow: 0 6px 12px rgba(214, 48, 49, 0.3);
-            }
-            
-            .chiron-popup .status {
-                margin-top: 1.2rem;
-                font-size: 1.1rem;
-                color: #ffffff;
-                text-align: center;
-                min-height: 3em;
-                padding: 0.75rem;
-                border-radius: 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                backdrop-filter: blur(10px);
-                font-family: inherit;
-                font-weight: 500;
-                letter-spacing: 0.3px;
-                line-height: 1.5;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.2);
-            }
-            
-            .chiron-popup .footer {
-                margin-top: 1.5rem;
-                font-size: 1rem;
-                color: #ffffff;
-                text-align: center;
-                opacity: 0.95;
-                max-width: 320px;
-                margin-left: auto;
-                margin-right: auto;
-                line-height: 1.5;
-                font-weight: 500;
-                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-            }
-            
-            .chiron-popup .footer::before {
-                content: '🌟';
-                margin-right: 8px;
-                font-size: 1.2rem;
-            }
-            
-            .chiron-popup .footer::after {
-                content: '🌟';
-                margin-left: 8px;
-                font-size: 1.2rem;
-            }
-            
-            .chiron-popup .visually-hidden {
-                position: absolute;
-                width: 1px;
-                height: 1px;
-                padding: 0;
-                margin: -1px;
-                overflow: hidden;
-                clip: rect(0,0,0,0);
-                border: 0;
-            }
-        `,
-    template: `
-            <div class="chiron-popup" id="chiron-popup">
-                <div class="container">
-                    <h1><b>CHIRON</b></h1>
-                    <div class="form-group">
-                        <label for="userPrompt" class="visually-hidden">Instructions</label>
-                        <input
-                            type="text"
-                            id="userPrompt"
-                            placeholder="✍️ What would you like to do?"
-                            autocomplete="off"
-                        />
-                        <button id="start" disabled>🚀 Guide Me</button>
-                    </div>
-                    <div class="button-group">
-                        <button id="stop">🛑 Stop Guide</button>
-                    </div>
-                    <div id="statusMessage" class="status">
-                        Ready to help you navigate! 🌈
-                    </div>
-                    <div class="footer">
-                        <p>Your friendly guide through the library's digital world</p>
-                    </div>
-                </div>
-            </div>
-        `,
-  };
-
-  // Add styles to the document
-  const styleSheet = document.createElement("style");
-  styleSheet.id = "chiron-popup-styles";
-  styleSheet.textContent = layout.styles;
-  document.head.appendChild(styleSheet);
-
-  // Add the popup HTML to the page
-  document.body.insertAdjacentHTML("beforeend", layout.template);
-
-  // Get DOM elements
-  const popup = document.getElementById("chiron-popup");
-  const userPrompt = document.getElementById("userPrompt");
-  const startBtn = document.getElementById("start");
-  const stopBtn = document.getElementById("stop");
-  const statusMessage = document.getElementById("statusMessage");
-
-  // Initialize state
-  let isGuiding = false;
-
-  // Update status message
-  function updateStatus(message) {
-    if (statusMessage) {
-      statusMessage.textContent = message;
-    }
+  // ---- 1) Inject VSCode-style CSS ----
+  const css = `
+  .chiron-popup {
+    position: fixed;
+    top: 20px;
+    left: 20px;        /* 20px in from the left */
+    right: 20px;       /* 20px in from the right */
+    max-width: 600px;  /* never grow wider than 600px */
+    height: 400px;
+    display: flex;
+    background: #1e1e1e;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    font-family: 'Menlo', Consolas, monospace;
+    color: #ddd;
+    overflow: hidden;
+    z-index: 2147483647;
+  }
+  .chiron-popup::before {
+    content: "Chiron";
+    position: absolute;
+    top: 12px;
+    left: 20px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    pointer-events: none;
+  }
+  /* Centered "×" close-button */
+  #chiron-popup .chiron-close {
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;             /* main close button stays at 8px */
+    width: 24px !important;
+    height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: 1px solid #fff !important;
+    border-radius: 4px !important;
+    color: #fff !important;
+    font-size: 16px !important;
+    padding: 0 !important;
+    cursor: pointer !important;
+    transition: border-color 0.2s, background-color 0.2s !important;
+    z-index: 2147483648 !important;
   }
 
-  // Enable/disable start button based on input
-  userPrompt.addEventListener("input", function () {
-    startBtn.disabled = !this.value.trim();
-  });
-
-  // Handle start guide
-  startBtn.addEventListener("click", async function () {
-    const prompt = userPrompt.value.trim();
-    if (!prompt) {
-      updateStatus("⚠️ Please enter instructions first");
-      return;
-    }
-
-    try {
-      // Disable buttons and show loading
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      userPrompt.disabled = true;
-      updateStatus("🔄 Analyzing the page...");
-      isGuiding = true;
-
-      // First, set the prompt in the background script
-      const setPromptResponse = await chrome.runtime.sendMessage({
-        action: "setPrompt",
-        prompt: prompt,
-      });
-
-      if (!setPromptResponse || !setPromptResponse.success) {
-        throw new Error("Failed to set prompt");
-      }
-
-      // Now start the guide - send to content script via background script
-      const startResponse = await chrome.runtime.sendMessage({
-        action: "startGuide",
-        prompt: prompt,
-      });
-
-      if (!startResponse || !startResponse.success) {
-        throw new Error(startResponse?.error || "Failed to start guide");
-      }
-
-      // Successfully started - close the popup
-      closePopup();
-    } catch (error) {
-      console.error("❌ Error starting guide:", error);
-      updateStatus(`❌ Error: ${error.message}`);
-      // Re-enable controls on error
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      userPrompt.disabled = false;
-      isGuiding = false;
-    }
-  });
-
-  // Handle stop guide
-  stopBtn.addEventListener("click", async function () {
-    try {
-      // Send message to content script via background script
-      const response = await chrome.runtime.sendMessage({
-        action: "stopGuide",
-      });
-
-      if (!response || !response.success) {
-        throw new Error("Failed to stop guide");
-      }
-
-      // Reset UI
-      isGuiding = false;
-      stopBtn.disabled = true;
-      startBtn.disabled = !userPrompt.value.trim();
-      userPrompt.disabled = false;
-      updateStatus("Guide stopped ✋");
-
-      // Close popup after a short delay
-      setTimeout(closePopup, 1000);
-    } catch (error) {
-      console.error("❌ Error stopping guide:", error);
-      updateStatus(`❌ Error: ${error.message}`);
-    }
-  });
-
-  // Handle Enter key in input
-  userPrompt.addEventListener("keypress", function (e) {
-    if (e.key === "Enter" && !startBtn.disabled) {
-      startBtn.click();
-    }
-  });
-
-  // Close popup function
-  function closePopup() {
-    popup.classList.add("closing");
-    setTimeout(() => {
-      popup.remove();
-      styleSheet.remove();
-    }, 300);
+  /* Settings close button - moved left */
+  #chiron-popup .settings-close {
+    position: absolute !important;
+    top: 8px !important;
+    right: 32px !important;            /* moved slightly more left to 32px */
+    width: 24px !important;
+    height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: 1px solid #fff !important;
+    border-radius: 4px !important;
+    color: #fff !important;
+    font-size: 16px !important;
+    padding: 0 !important;
+    cursor: pointer !important;
+    transition: border-color 0.2s, background-color 0.2s !important;
+    z-index: 2147483648 !important;
   }
 
-  // Listen for messages from background script
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "error") {
-      updateStatus(`❌ ${message.message}`);
-    } else if (message.action === "status") {
-      updateStatus(message.message);
+  /* Hover states stay the same */
+  #chiron-popup .settings-close:hover,
+  #chiron-popup .chiron-close:hover {
+    background: #e81123 !important;
+    border-color: #e81123 !important;
+  }
+  .chiron-popup .sidebar {
+    width: 180px;
+    background: #252526;
+    border-right: 1px solid #333;
+    display: flex; flex-direction: column;
+  }
+  .chiron-popup .sidebar .history {
+    flex: 1; 
+    overflow-y: auto;
+    padding: 36px 8px 8px 8px;    /* added 36px top padding to clear the title */
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .chiron-popup .sidebar .settings-btn {
+    padding: 8px; cursor: pointer;
+    text-align: center; border-top: 1px solid #333;
+  }
+  .chiron-popup .main {
+    flex: 1; display: flex; flex-direction: column;
+  }
+  /* make #mainUI stack its children vertically */
+  #chiron-popup #mainUI {
+    display: flex;
+    flex-direction: column;
+    height: 100%;      /* fill the .main container */
+  }
+  .chiron-popup .prompt-container {
+    position: relative;
+    padding: 12px;
+    background: #1e1e1e;
+    border-bottom: 1px solid #333;
+  }
+  .chiron-popup .prompt-container input {
+    width: 80%;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 14px;
+    caret-color: #fff;
+  }
+  .chiron-popup .prompt-container .ghost {
+    position: absolute;
+    top: 20px; left: 24px;
+    pointer-events: none;
+    color: #888;
+    font-family: inherit;
+    font-size: 14px;
+    white-space: pre;
+  }
+  .chiron-popup .prompt-container .suggestions {
+    background: #252526;
+    border: 1px solid #3c3c3c;
+    margin-top: 4px;
+    border-radius: 4px;
+    max-height: 120px;
+    overflow-y: auto;
+    display: none;
+  }
+  .chiron-popup .prompt-container .suggestions .item {
+    padding: 6px 12px; cursor: pointer;
+  }
+  .chiron-popup .prompt-container .suggestions .item.selected {
+    background: #094771; color: #fff;
+  }
+  .chiron-popup .status {
+    flex: 1; padding: 12px;
+    overflow-y: auto; font-size: 13px; line-height: 1.5;
+  }
+  .chiron-popup .controls {
+    padding: 8px;
+    display: flex; justify-content: flex-end; gap: 8px;
+    background: #1e1e1e;
+    border-top: 1px solid #333;
+  }
+  .chiron-popup .controls button {
+    background: #0e639c; color: #fff;
+    border: none; padding: 6px 14px;
+    border-radius: 4px; cursor: pointer; font-size: 13px;
+  }
+  .chiron-popup .controls button:disabled {
+    background: #333; cursor: not-allowed;
+  }
+  /*──────────────────────────────────────────
+    Settings pane, inside the popup
+  ──────────────────────────────────────────*/
+  #chiron-popup #settingsDrawer {
+    display: none;                  /* start hidden */
+    position: absolute;             /* overlay the right half */
+    top: 0;
+    left: 180px;                    /* same width as your .sidebar */
+    width: calc(100% - 180px);
+    height: 100%;
+    background: #252526;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    border-radius: 0 8px 8px 0;     /* round only the right corners */
+    padding: 12px;
+    color: #ccc;
+    font-size: 13px;
+    z-index: 2147483648;            /* just above the main popup */
+  }
+
+  /* Close-button in the settings pane */
+  #chiron-popup #settingsDrawer .settings-close {
+    position: absolute;
+    top: 12px;
+    right: 36px;        /* moved even more to the left */
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+  }
+  #chiron-popup #settingsDrawer .settings-close:hover {
+    background: #e81123;
+    border-color: #e81123;
+  }
+  #chiron-popup #settingsDrawer h3 {
+    margin-top: 0; color: #fff;
+  }
+  #chiron-popup #settingsDrawer label {
+    display: block;
+    margin-top: 16px;    /* add space after the heading */
+  }
+  #chiron-popup #settingsDrawer input {
+    width: calc(100% - 48px);    /* leave 24px padding on each side */
+    padding: 6px;
+    margin: 8px 0 16px 0;    /* more space after the input */
+    background: #1e1e1e;
+    border: 1px solid #3c3c3c;
+    color: #fff;
+  }
+  #chiron-popup #settingsDrawer button {
+    background: #0e639c;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  `;
+  const styleEl = document.createElement("style");
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+
+  // ---- 2) Inject HTML markup ----
+  const html = `
+    <div class="chiron-popup" id="chiron-popup">
+      <button id="chiron-close" class="chiron-close" title="Close Chiron">&times;</button>
+
+      <div class="sidebar">
+        <div class="history" id="history"></div>
+        <div class="settings-btn" id="openSettings">⚙️ Settings</div>
+      </div>
+
+      <div class="main" id="chiron-main">
+        <div id="mainUI">
+          <div class="prompt-container">
+            <input type="text" id="userPrompt" placeholder="Type your instruction…" autocomplete="off"/>
+          </div>
+          <div class="status" id="statusMessage">Ready to guide you.</div>
+          <div class="controls">
+            <button id="stop" disabled>Stop</button>
+            <button id="start" disabled>Go</button>
+          </div>
+        </div>
+
+        <div id="settingsDrawer">
+          <button id="settings-close" class="settings-close" title="Close settings">&times;</button>
+          <h3>Chiron Settings</h3>
+          <label>API Key:</label>
+          <input type="password" id="apiKeyInput" placeholder="sk-…" />
+          <button id="saveSettings">Save</button>
+        </div>
+      </div>
+    </div> 
+  `;
+  const wrapper = document.createElement("div");
+  wrapper.id = "chiron-wrapper";
+  wrapper.innerHTML = html;
+  document.body.appendChild(wrapper);
+
+  // ---- 3) Grab element refs ----
+  const promptInput = document.getElementById("userPrompt");
+  const startBtnEl = document.getElementById("start");
+  const stopBtnEl = document.getElementById("stop");
+  const statusEl = document.getElementById("statusMessage");
+  const historyEl = document.getElementById("history");
+  const openSettingsEl = document.getElementById("openSettings");
+  const settingsEl = document.getElementById("settingsDrawer");
+  const apiKeyInputEl = document.getElementById("apiKeyInput");
+  const saveSettingsEl = document.getElementById("saveSettings");
+  const closeBtnEl = document.getElementById("chiron-close");
+  const settingsCloseBtn = document.getElementById("settings-close");
+  const mainUI = document.getElementById("mainUI");
+
+  // ---- 4) Load stored API key ----
+  loadApiKey().then((key) => {
+    if (key) apiKeyInputEl.value = key;
+  });
+
+  // ---- 5) Event listeners ----
+  promptInput.addEventListener("input", () => {
+    startBtnEl.disabled = !promptInput.value.trim();
+  });
+
+  startBtnEl.addEventListener("click", async () => {
+    const promptText = promptInput.value.trim();
+    if (!promptText) return;
+
+    statusEl.textContent = "⏳ Processing...";
+    startBtnEl.disabled = true;
+
+    try {
+      if (location.hostname.includes("canva.com")) {
+        // 1) Classify which guide
+        const { success, key, error } = await new Promise((r) =>
+          chrome.runtime.sendMessage(
+            { action: "runCanvaPrompt", prompt: promptText },
+            r
+          )
+        );
+        if (!success) throw new Error(error || "No guide found");
+
+        // 2) Ask user Manual vs. Auto
+        const doAuto = confirm(
+          `Found guide "${key}". Do you want me to perform it automatically?`
+        );
+        if (doAuto) {
+          await new Promise((r) =>
+            chrome.runtime.sendMessage({ action: "runCanvaTask", key }, r)
+          );
+          statusEl.textContent = `✅ Automated "${key}"`;
+        } else {
+          await new Promise((r) =>
+            chrome.runtime.sendMessage({ action: "startManualGuide", key }, r)
+          );
+          statusEl.textContent = `✅ Manual guide "${key}" started`;
+        }
+      } else {
+        // —— Default AI guide path ——
+        appendHistory("You", promptText);
+        await runChironGuide(promptText);
+        statusEl.textContent = "✅ Done guiding.";
+      }
+    } catch (err) {
+      console.error("❌ Error:", err);
+      statusEl.textContent = `❌ ${err.message}`;
+    } finally {
+      startBtnEl.disabled = false;
     }
   });
 
-  // Handle clicks outside the popup
-  document.addEventListener("click", function (e) {
-    if (!popup.contains(e.target)) {
-      closePopup();
+  stopBtnEl.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "stopGuide" }, () => {
+      // Restore UI for the next prompt
+      stopBtnEl.disabled = true;
+      startBtnEl.disabled = false;
+      promptInput.disabled = false;
+      statusEl.textContent = "⏹️ Guide stopped";
+    });
+  });
+
+  openSettingsEl.addEventListener("click", () => {
+    mainUI.style.display = "none"; // hide just the UI
+    settingsEl.style.display = "block"; // show settings
+  });
+
+  settingsCloseBtn.addEventListener("click", () => {
+    settingsEl.style.display = "none"; // hide settings
+    mainUI.style.display = ""; // let your CSS take back control
+  });
+
+  saveSettingsEl.addEventListener("click", () => {
+    saveApiKey(apiKeyInputEl.value);
+    // only give feedback—leave settings open
+    statusEl.textContent = "✅ API key saved";
+  });
+
+  // Listen for manual guide exit
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === "manualGuideExited") {
+      document.getElementById("chiron-popup").style.display = "flex";
     }
   });
 
-  // Prevent popup from closing when clicking inside it
-  popup.addEventListener("click", function (e) {
-    e.stopPropagation();
+  // Wire up close button
+  closeBtnEl.addEventListener("click", () => {
+    const wrapper = document.getElementById("chiron-wrapper");
+    if (wrapper) wrapper.remove();
   });
+
+  // ---- History helper ----
+  function appendHistory(speaker, text) {
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.innerHTML = `<strong>${speaker}:</strong> ${escapeHtml(text)}`;
+    historyEl.appendChild(div);
+    historyEl.scrollTop = historyEl.scrollHeight;
+  }
+
+  // ---- Helpers ----
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  function loadApiKey() {
+    return new Promise((r) =>
+      chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey || ""))
+    );
+  }
+  function saveApiKey(key) {
+    chrome.storage.local.set({ chironApiKey: key });
+  }
+  function runChironGuide(prompt) {
+    return new Promise((resolve, reject) =>
+      loadApiKey().then((key) => {
+        chrome.runtime.sendMessage(
+          { action: "startGuide", prompt, apiKey: key },
+          (resp) => {
+            if (!resp || !resp.success) reject(resp?.error || "Failed");
+            else resolve();
+          }
+        );
+      })
+    );
+  }
 })();
