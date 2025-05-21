@@ -251,18 +251,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
           );
 
-          if (!res.ok) {
-            throw new Error(`API error ${res.status}`);
-          }
-
           const data = await res.json();
-          const guideKey = data.choices[0].message.content
-            .trim()
-            .replace(/^['"\s]+|['"\s]+$/g, "");
-
+          const guideKey = data.choices[0].message.content.trim();
           sendResponse({ success: true, key: guideKey });
         } catch (err) {
-          console.error("❌ runCanvaPrompt failed:", err);
+          console.error("❌ Error running Canva prompt:", err);
           sendResponse({ success: false, error: err.message });
         }
       })();
@@ -270,7 +263,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case "runCanvaTask":
       if (sender.tab?.id) {
-        console.log(`📤 Forwarding ${msg.action} to tab ${sender.tab.id}`);
         chrome.tabs.sendMessage(sender.tab.id, msg, sendResponse);
         return true;
       }

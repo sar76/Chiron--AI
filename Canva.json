@@ -376,6 +376,86 @@
           "position": "right"
         }
       ]
+    },
+    {
+      "key": "openNotesPanel",
+      "steps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.MCgm0w.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg.OC4AXA",
+          "intro": "Click the 'Notes' button to open the speaker notes panel for your slideshow.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "openDurationPanel",
+      "steps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.MCgm0w.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg",
+          "intro": "Click the 'Duration' button to open the timeline and treat your slideshow like a video.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "openTimerPanel",
+      "steps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.MCgm0w.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg[aria-label=\"Show timer\"]",
+          "intro": "Click the 'Timer' button to display the slideshow timer.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "adjustZoom",
+      "steps": [
+        {
+          "selector": "input.G83NzQ[aria-label=\"Zoom\"]",
+          "intro": "Adjust the 'Zoom' slider to zoom in or out on your slideshow or thumbnail.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "goToPage",
+      "steps": [
+        {
+          "selector": "button.vZB9Zg",
+          "intro": "Click the button and enter a value to jump to that specific page of your slideshow.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "openGridView",
+      "steps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.h69Neg.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg.gi5pqg.pnGOPw[aria-label=\"Grid view\"]",
+          "intro": "Click the 'Grid view' button to display your slideshow in grid view.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "proTrial",
+      "steps": [
+        {
+          "selector": "button.Z3nT2A",
+          "intro": "Click the button to purchase the pro subscription and unlock all the features for Canva.",
+          "position": "bottom"
+        }
+      ]
+    },
+    {
+      "key": "startPresentation",
+      "steps": [
+        {
+          "selector": "button[aria-label=\"Present full screen\"]",
+          "intro": "Click the 'Present full screen' button to start your slideshow in full screen mode.",
+          "position": "bottom"
+        }
+      ]
     }
   ]
 }

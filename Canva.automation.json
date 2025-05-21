@@ -1,0 +1,164 @@
+{
+  "automationGuides": [
+    {
+      "key": "startPresentation",
+      "automationSteps": [
+        {
+          "selector": "button[aria-label=\"Present full screen\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "openNotesPanel",
+      "automationSteps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.MCgm0w.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg.OC4AXA",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "openDurationPanel",
+      "automationSteps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.MCgm0w.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "openTimerPanel",
+      "automationSteps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.MCgm0w.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg[aria-label=\"Show timer\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "openGridView",
+      "automationSteps": [
+        {
+          "selector": "button._5KtATA.LQzFZw.VgvqkQ._8ERLTg.h69Neg.unS_Qw.LQzFZw.VgvqkQ.f5yKmw.j34Zww.aqbYPg._3FvZZg.gi5pqg.pnGOPw[aria-label=\"Grid view\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "proTrial",
+      "automationSteps": [
+        {
+          "selector": "button.Z3nT2A",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "undo",
+      "automationSteps": [
+        {
+          "selector": "button[aria-label=\"Undo\"]",
+          "action": "click",
+          "delay": 300
+        }
+      ]
+    },
+    {
+      "key": "redo",
+      "automationSteps": [
+        {
+          "selector": "button[aria-label=\"Redo\"]",
+          "action": "click",
+          "delay": 300
+        }
+      ]
+    },
+    {
+      "key": "viewMode",
+      "automationSteps": [
+        {
+          "selector": "button.MCgm0w.unS_Qw.XWi4sQ",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "uploadFile",
+      "automationSteps": [
+        {
+          "selector": "button[role='menuitem'][aria-controls='header_item6']",
+          "action": "click",
+          "delay": 500
+        },
+        {
+          "selector": "button.PuABGQ.FQ64gg.uMo6Kw",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "openSettings",
+      "automationSteps": [
+        {
+          "selector": "button[role='menuitem'][aria-controls='header_item6']",
+          "action": "click",
+          "delay": 500
+        },
+        {
+          "selector": "button[id=\":r9r:\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "shareExport",
+      "automationSteps": [
+        {
+          "selector": "path[d^=\"M4.5 11.75\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "viewComments",
+      "automationSteps": [
+        {
+          "selector": "button[aria-label=\"View all comments\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "analytics",
+      "automationSteps": [
+        {
+          "selector": "button[aria-label=\"Analytics\"]",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    },
+    {
+      "key": "addCollaborator",
+      "automationSteps": [
+        {
+          "selector": "button.V_p1oA.Z3nT2A",
+          "action": "click",
+          "delay": 500
+        }
+      ]
+    }
+  ]
+} 

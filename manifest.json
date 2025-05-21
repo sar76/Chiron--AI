@@ -31,7 +31,7 @@
     },
     {
       "matches": ["https://*.canva.com/*"],
-      "js": ["Canva.js"],
+      "js": ["Canva.js", "content_scripts/canva-automation.js"],
       "run_at": "document_idle"
     },
     {
@@ -59,12 +59,13 @@
         "libs/introjs.min.css",
         "popup-injector.js",
         "Canva.json",
+        "Canva.automation.json",
         "introjs.min.css"
       ],
       "matches": ["<all_urls>"]
     },
     {
-      "resources": ["Canva.json", "introjs.min.css"],
+      "resources": ["Canva.json", "Canva.automation.json", "introjs.min.css"],
       "matches": ["https://*.canva.com/*"]
     }
   ],
