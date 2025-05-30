@@ -159,6 +159,14 @@
           "delay": 500
         }
       ]
+    },
+    {
+      "key": "changeTitle",
+      "automationSteps": [
+        { "selector": "input[aria-label='Design title']", "action": "click",    "delay": 200 },
+        { "selector": "input[aria-label='Design title']", "action": "type",     /* no static value */ },
+        { "selector": "input[aria-label='Design title']", "action": "pressEnter"}
+      ]
     }
   ]
 } 

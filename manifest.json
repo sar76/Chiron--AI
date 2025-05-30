@@ -31,18 +31,9 @@
     },
     {
       "matches": ["https://*.canva.com/*"],
-      "js": ["Canva.js", "content_scripts/canva-automation.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://*.canva.com/*"],
-      "js": ["popup-injector.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["*://*.canva.com/*"],
+      "js": ["Canva.js", "canva-automation.js", "popup-injector.js"],
       "css": ["introjs.min.css"],
-      "js": ["content.js", "Canva.js"]
+      "run_at": "document_idle"
     }
   ],
   "action": {

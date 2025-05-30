@@ -338,6 +338,44 @@
     if (key) apiKeyInputEl.value = key;
   });
 
+  // ---- Helper Functions ----
+  function closePopup() {
+    const wrapper = document.getElementById("chiron-wrapper");
+    if (wrapper) wrapper.remove();
+  }
+
+  function appendHistory(speaker, text) {
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.innerHTML = `<strong>${speaker}:</strong> ${escapeHtml(text)}`;
+    historyEl.appendChild(div);
+    historyEl.scrollTop = historyEl.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function loadApiKey() {
+    return new Promise((r) =>
+      chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey || ""))
+    );
+  }
+
+  function saveApiKey(key) {
+    chrome.storage.local.set({ chironApiKey: key });
+  }
+
+  function resetUI() {
+    promptInput.disabled = false;
+    promptInput.value = "";
+    startBtnEl.disabled = true;
+    stopBtnEl.disabled = true;
+  }
+
   // ---- 5) Event listeners ----
   promptInput.addEventListener("input", () => {
     startBtnEl.disabled = !promptInput.value.trim();
@@ -351,19 +389,28 @@
     startBtnEl.disabled = true;
     automationOptions.style.display = "none";
 
-    try {
-      if (location.hostname.includes("canva.com")) {
-        // 1) Classify which guide
-        const { success, key, error } = await new Promise((r) =>
+    // DOMAIN CHECK:
+    if (window.location.hostname.includes("canva.com")) {
+      // 🖼️ Canva-only flow: classify → show manual vs automation buttons
+      statusEl.textContent = "⏳ Processing Canva request…";
+      try {
+        const response = await new Promise((r) =>
           chrome.runtime.sendMessage(
-            { action: "runCanvaPrompt", prompt: promptText },
+            {
+              action: "runCanvaPrompt",
+              prompt: promptText,
+            },
             r
           )
         );
-        if (!success) throw new Error(error || "No guide found");
 
-        // 2) Show automation options
-        statusEl.textContent = `✨ Found guide "${key}". Choose how to proceed:`;
+        if (!response.success) {
+          throw new Error(response.error || "No matching guide found");
+        }
+
+        // Show automation options with the guide key
+        statusEl.textContent = `✨ Found guide "${response.key}". Choose how to proceed:`;
+        statusEl.setAttribute("data-guide-key", response.key);
         automationOptions.style.display = "block";
 
         // Wire up the buttons
@@ -373,10 +420,16 @@
             automationOptions.style.display = "none";
 
             await new Promise((r) =>
-              chrome.runtime.sendMessage({ action: "startManualGuide", key }, r)
+              chrome.runtime.sendMessage(
+                {
+                  action: "startManualGuide",
+                  key: response.key,
+                },
+                r
+              )
             );
 
-            statusEl.textContent = `✅ Manual guide "${key}" started`;
+            statusEl.textContent = `✅ Manual guide "${response.key}" started`;
             closePopup();
           } catch (err) {
             console.error("Error starting manual guide:", err);
@@ -387,14 +440,181 @@
 
         autoBtn.onclick = async () => {
           try {
+            const guideKey = statusEl.getAttribute("data-guide-key");
+            if (!guideKey) {
+              throw new Error("No guide key found");
+            }
+
             statusEl.textContent = "🤖 Starting automation...";
             automationOptions.style.display = "none";
+            autoBtn.disabled = true;
 
-            await new Promise((r) =>
-              chrome.runtime.sendMessage({ action: "runCanvaTask", key }, r)
-            );
+            const [{ tabId }] = await chrome.tabs.query({
+              active: true,
+              currentWindow: true,
+            });
 
-            statusEl.textContent = `✅ Automated "${key}"`;
+            const [result] = await chrome.scripting.executeScript({
+              target: { tabId },
+              func: async (guideKey) => {
+                try {
+                  // Load automation configuration
+                  const cfg = await fetch(
+                    chrome.runtime.getURL("Canva.automation.json")
+                  ).then((r) => r.json());
+                  const task = cfg.automationGuides.find(
+                    (a) => a.key === guideKey
+                  );
+
+                  if (!task) {
+                    throw new Error(
+                      `No automation found for key "${guideKey}"`
+                    );
+                  }
+
+                  console.group(
+                    `🌟 Running Canva automation for "${guideKey}"`
+                  );
+
+                  for (const [i, step] of task.automationSteps.entries()) {
+                    console.log(
+                      `— Step ${i + 1}/${task.automationSteps.length}:`,
+                      step
+                    );
+
+                    // Wait for element to be visible and enabled
+                    const el = await new Promise((resolve, reject) => {
+                      let elapsed = 0;
+                      const interval = 100;
+                      const check = () => {
+                        const element = document.querySelector(step.selector);
+                        if (
+                          element &&
+                          element.offsetParent !== null &&
+                          !element.disabled &&
+                          window.getComputedStyle(element).visibility !==
+                            "hidden"
+                        ) {
+                          return resolve(element);
+                        }
+                        if ((elapsed += interval) >= (step.delay || 5000)) {
+                          return reject(
+                            new Error(
+                              `Timeout waiting for visible selector: ${step.selector}`
+                            )
+                          );
+                        }
+                        setTimeout(check, interval);
+                      };
+                      check();
+                    });
+
+                    // Scroll into view instantly and wait for reflow
+                    el.scrollIntoView({ behavior: "auto", block: "center" });
+                    await new Promise((r) => setTimeout(r, 500));
+
+                    // Re-query the element to ensure we have a fresh reference
+                    const freshEl = document.querySelector(step.selector);
+                    if (!freshEl) {
+                      throw new Error(
+                        `Element disappeared after becoming visible: ${step.selector}`
+                      );
+                    }
+
+                    try {
+                      switch (step.action) {
+                        case "click":
+                          console.log(
+                            `👉 [Step ${i + 1}] Clicking`,
+                            step.selector
+                          );
+                          freshEl.click(); // This click will be trusted since it's in the context of a user gesture
+                          break;
+
+                        case "type":
+                          const text = step.value || "";
+                          console.log(
+                            `⌨️ [Step ${i + 1}] Typing into ${step.selector}:`,
+                            JSON.stringify(text)
+                          );
+                          freshEl.focus();
+                          if ("value" in freshEl) {
+                            freshEl.value = text;
+                            freshEl.dispatchEvent(
+                              new Event("input", { bubbles: true })
+                            );
+                            freshEl.dispatchEvent(
+                              new Event("change", { bubbles: true })
+                            );
+                          } else {
+                            freshEl.innerText = text;
+                            freshEl.dispatchEvent(
+                              new InputEvent("input", { bubbles: true })
+                            );
+                            freshEl.dispatchEvent(
+                              new Event("change", { bubbles: true })
+                            );
+                          }
+                          break;
+
+                        case "pressEnter":
+                          console.log(
+                            `⏎ [Step ${i + 1}] Pressing Enter on`,
+                            step.selector
+                          );
+                          freshEl.dispatchEvent(
+                            new KeyboardEvent("keydown", {
+                              key: "Enter",
+                              bubbles: true,
+                            })
+                          );
+                          freshEl.dispatchEvent(
+                            new KeyboardEvent("keyup", {
+                              key: "Enter",
+                              bubbles: true,
+                            })
+                          );
+                          freshEl.dispatchEvent(
+                            new KeyboardEvent("keypress", {
+                              key: "Enter",
+                              bubbles: true,
+                            })
+                          );
+                          break;
+
+                        default:
+                          console.warn(
+                            `⚠️ [Step ${i + 1}] Unknown action "${step.action}"`
+                          );
+                      }
+                    } catch (err) {
+                      console.error(
+                        `❌ [Step ${i + 1}] Action "${step.action}" failed:`,
+                        err
+                      );
+                      throw err;
+                    }
+
+                    // Wait for any animations or state changes to complete
+                    await new Promise((r) => setTimeout(r, step.delay || 500));
+                  }
+
+                  console.log(`✅ Completed automation for "${guideKey}"`);
+                  console.groupEnd();
+                  return { success: true };
+                } catch (err) {
+                  console.error("🚨 Canva automation error:", err);
+                  return { success: false, error: err.message };
+                }
+              },
+              args: [guideKey],
+            });
+
+            if (!result.result.success) {
+              throw new Error(result.result.error || "Automation failed");
+            }
+
+            statusEl.textContent = `✅ Automated "${guideKey}"`;
             closePopup();
           } catch (err) {
             console.error("Error starting automation:", err);
@@ -408,17 +628,29 @@
           automationOptions.style.display = "none";
           resetUI();
         };
-      } else {
-        // —— Default AI guide path ——
-        appendHistory("You", promptText);
-        await runChironGuide(promptText);
-        statusEl.textContent = "✅ Done guiding.";
+      } catch (err) {
+        console.error("❌ Error:", err);
+        statusEl.textContent = `❌ ${err.message}`;
+        resetUI();
+      } finally {
+        startBtnEl.disabled = false;
       }
-    } catch (err) {
-      console.error("❌ Error:", err);
-      statusEl.textContent = `❌ ${err.message}`;
-    } finally {
-      startBtnEl.disabled = false;
+    } else {
+      // 🌐 Universal flow: kick off the generic guide immediately
+      statusEl.textContent = "🔄 Starting guide…";
+      try {
+        await new Promise((r) =>
+          chrome.runtime.sendMessage(
+            { action: "startGuide", prompt: promptText },
+            r
+          )
+        );
+        statusEl.textContent = "✅ Guide started";
+        closePopup();
+      } catch (err) {
+        statusEl.textContent = `❌ ${err.message}`;
+        startBtnEl.disabled = false;
+      }
     }
   });
 
@@ -448,10 +680,12 @@
     statusEl.textContent = "✅ API key saved";
   });
 
-  // Listen for manual guide exit
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === "manualGuideExited") {
-      document.getElementById("chiron-popup").style.display = "flex";
+  // Listen for messages from background script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action === "error") {
+      statusEl.textContent = `❌ ${message.message}`;
+    } else if (message.action === "status") {
+      statusEl.textContent = message.message;
     }
   });
 
@@ -460,49 +694,4 @@
     const wrapper = document.getElementById("chiron-wrapper");
     if (wrapper) wrapper.remove();
   });
-
-  // ---- History helper ----
-  function appendHistory(speaker, text) {
-    const div = document.createElement("div");
-    div.className = "msg";
-    div.innerHTML = `<strong>${speaker}:</strong> ${escapeHtml(text)}`;
-    historyEl.appendChild(div);
-    historyEl.scrollTop = historyEl.scrollHeight;
-  }
-
-  // ---- Helpers ----
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-  function loadApiKey() {
-    return new Promise((r) =>
-      chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey || ""))
-    );
-  }
-  function saveApiKey(key) {
-    chrome.storage.local.set({ chironApiKey: key });
-  }
-  function runChironGuide(prompt) {
-    return new Promise((resolve, reject) =>
-      loadApiKey().then((key) => {
-        chrome.runtime.sendMessage(
-          { action: "startGuide", prompt, apiKey: key },
-          (resp) => {
-            if (!resp || !resp.success) reject(resp?.error || "Failed");
-            else resolve();
-          }
-        );
-      })
-    );
-  }
-
-  function resetUI() {
-    promptInput.disabled = false;
-    promptInput.value = "";
-    startBtnEl.disabled = true;
-    stopBtnEl.disabled = true;
-  }
 })();
