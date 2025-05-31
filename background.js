@@ -32,10 +32,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// ★ Replace with your own key ★
-const OPENAI_API_KEY =
-  "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";
-
 // Firebase configuration
 const FIREBASE_PROJECT_ID = "chiron-nbfpl-test";
 const FIREBASE_FUNCTIONS_URL = `https://us-central1-${FIREBASE_PROJECT_ID}.cloudfunctions.net`;
@@ -58,17 +54,6 @@ async function getUserId() {
 
 // Log when background script loads
 console.log("🔄 Background script loaded");
-
-// Validate API key on startup
-if (!OPENAI_API_KEY || OPENAI_API_KEY === "your-api-key-here") {
-  console.error("❌ OpenAI API key is not set or is invalid");
-  chrome.runtime.sendMessage({
-    action: "error",
-    message: "OpenAI API key is not configured. Please check your API key.",
-  });
-} else {
-  console.log("✅ API key is set:", OPENAI_API_KEY.substring(0, 10) + "...");
-}
 
 let userPrompt = ""; // holds the instructions for this session
 
@@ -115,6 +100,28 @@ async function sendResumeMessage(tabId, state, retryCount = 0) {
     }
   }
 }
+
+/**
+ * Fetch the user's OpenAI key from chrome.storage.
+ * Resolves to an empty string if none is stored.
+ */
+async function getApiKeyFromStorage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get("chironApiKey", (result) => {
+      resolve(result.chironApiKey || "");
+    });
+  });
+}
+
+// Warn if no API key is set
+(async () => {
+  const stored = await getApiKeyFromStorage();
+  if (!stored) {
+    console.error(
+      "❌ No OpenAI API key saved. Please open Chiron's popup and paste your key under Settings."
+    );
+  }
+})();
 
 // Log all incoming messages
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -207,10 +214,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       (async () => {
         try {
           // Get API key from storage
-          const key = await new Promise((r) =>
-            chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey))
-          );
-          if (!key) {
+          const apiKey = await getApiKeyFromStorage();
+          if (!apiKey) {
             sendResponse({ success: false, error: "No API key configured" });
             return;
           }
@@ -232,7 +237,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${key}`,
+                Authorization: `Bearer ${apiKey}`,
               },
               body: JSON.stringify({
                 model: "gpt-3.5-turbo",
@@ -280,18 +285,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case "fetchSuggestion":
       (async () => {
         try {
-          // get API key (either passed in or from storage)
-          const key =
-            msg.apiKey ||
-            (await new Promise((r) =>
-              chrome.storage.local.get("chironApiKey", (d) => r(d.chironApiKey))
-            ));
+          // get API key from storage
+          const apiKey = await getApiKeyFromStorage();
+          if (!apiKey) {
+            sendResponse({ success: false, error: "No API key configured" });
+            return;
+          }
+
           // call OpenAI
           const apiRes = await fetch("https://api.openai.com/v1/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${key}`,
+              Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
               model: "gpt-4o-mini",
@@ -411,6 +417,12 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
   try {
     console.log("🔄 Analyzing DOM for guidance...");
 
+    // Get API key from storage
+    const apiKey = await getApiKeyFromStorage();
+    if (!apiKey) {
+      throw new Error("No API key configured");
+    }
+
     // Get user ID for this session
     const userId = await getUserId();
 
@@ -483,7 +495,7 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
     });

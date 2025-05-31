@@ -304,7 +304,12 @@
           <button id="settings-close" class="settings-close" title="Close settings">&times;</button>
           <h3>Chiron Settings</h3>
           <label>API Key:</label>
-          <input type="password" id="apiKeyInput" placeholder="sk-…" />
+          <input
+            type="password"
+            id="apiKeyInput"
+            placeholder="sk-…"
+            autocomplete="new-password"
+          />
           <button id="saveSettings">Save</button>
         </div>
       </div>

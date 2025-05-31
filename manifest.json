@@ -37,15 +37,14 @@
     }
   ],
   "action": {
-    "default_icon": "icon.png"
+    "default_icon": "icon128.png"
   },
   "icons": {
-    "128": "icon.png"
+    "128": "icon128.png"
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "icon.png",
         "libs/intro.min.js",
         "libs/introjs.min.css",
         "popup-injector.js",
