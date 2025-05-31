@@ -3,7 +3,7 @@ async function runCanvaAutomation(guideKey) {
   try {
     // Load automation configuration
     const cfg = await fetch(
-      chrome.runtime.getURL("Canva.automation.json")
+      chrome.runtime.getURL("./Canva.automation.json")
     ).then((r) => r.json());
     const task = cfg.automationGuides.find((a) => a.key === guideKey);
 

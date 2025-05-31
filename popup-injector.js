@@ -1,5 +1,8 @@
 // popup-injector.js
 (function () {
+  // Track whether we've already shown helpful links & summary
+  let helpShown = false;
+
   if (document.getElementById("chiron-popup")) {
     console.log("⚠️ Chiron popup already present");
     return;
@@ -106,12 +109,14 @@
     display: flex;
     flex-direction: column;
     height: 100%;      /* fill the .main container */
+    min-height: 0;     /* allow flex child to shrink below content size */
   }
   .chiron-popup .prompt-container {
     position: relative;
     padding: 12px;
     background: #1e1e1e;
     border-bottom: 1px solid #333;
+    flex: 0 0 auto;    /* don't grow or shrink */
   }
   .chiron-popup .prompt-container input {
     width: 80%;
@@ -148,14 +153,75 @@
     background: #094771; color: #fff;
   }
   .chiron-popup .status {
-    flex: 1; padding: 12px;
-    overflow-y: auto; font-size: 13px; line-height: 1.5;
+    flex: 0 0 auto;    /* don't grow or shrink */
+    padding: 12px;
+    font-size: 13px; 
+    line-height: 1.5;
   }
+
+  /* Helpful Links Panel */
+  .chiron-popup .helpful-links {
+    display: none;
+    margin: 12px;
+    padding: 12px;
+    background: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    flex: 1 1 auto;    /* grow and shrink as needed */
+    min-height: 0;     /* allow shrinking below content size */
+    overflow-y: auto;  /* scroll if content overflows */
+  }
+
+  .chiron-popup .helpful-links h4 {
+    margin: 0 0 8px 0;
+    color: #fff;
+    font-size: 14px;
+    flex: 0 0 auto;    /* don't grow or shrink */
+  }
+
+  .chiron-popup .helpful-links .links {
+    margin-bottom: 12px;
+    flex: 0 0 auto;    /* don't grow or shrink */
+  }
+
+  .chiron-popup .helpful-links .links a {
+    display: block;
+    color: #0e639c;
+    text-decoration: none;
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+
+  .chiron-popup .helpful-links .links a:hover {
+    text-decoration: underline;
+  }
+
+  .chiron-popup .helpful-links .summary {
+    color: #ddd;
+    font-size: 13px;
+    line-height: 1.4;
+    flex: 0 0 auto;    /* don't grow or shrink */
+  }
+
+  .chiron-popup .helpful-links .loading {
+    color: #888;
+    font-style: italic;
+  }
+
+  .chiron-popup .helpful-links .error {
+    color: #f14c4c;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
   .chiron-popup .controls {
     padding: 8px;
-    display: flex; justify-content: flex-end; gap: 8px;
+    display: flex; 
+    justify-content: flex-end; 
+    gap: 8px;
     background: #1e1e1e;
     border-top: 1px solid #333;
+    flex: 0 0 auto;    /* don't grow or shrink */
   }
   .chiron-popup .controls button {
     background: #0e639c; color: #fff;
@@ -289,6 +355,11 @@
             <input type="text" id="userPrompt" placeholder="Type your instruction…" autocomplete="off"/>
           </div>
           <div class="status" id="statusMessage">Ready to guide you.</div>
+          <div class="helpful-links" id="helpfulLinks">
+            <h4>Helpful Links</h4>
+            <div class="links"></div>
+            <div class="summary"></div>
+          </div>
           <div id="automationOptions">
             <button id="manualBtn" class="automation-btn">Run Guide</button>
             <button id="autoBtn" class="automation-btn">Automate Task</button>
@@ -337,6 +408,9 @@
   const closeBtnEl = document.getElementById("chiron-close");
   const settingsCloseBtn = document.getElementById("settings-close");
   const mainUI = document.getElementById("mainUI");
+  const helpfulLinksEl = document.getElementById("helpfulLinks");
+  const helpfulLinksContent = helpfulLinksEl.querySelector(".links");
+  const helpfulLinksSummary = helpfulLinksEl.querySelector(".summary");
 
   // ---- 4) Load stored API key ----
   loadApiKey().then((key) => {
@@ -344,9 +418,18 @@
   });
 
   // ---- Helper Functions ----
-  function closePopup() {
+  function hidePopup() {
     const wrapper = document.getElementById("chiron-wrapper");
-    if (wrapper) wrapper.remove();
+    if (wrapper) {
+      wrapper.style.display = "none";
+    }
+  }
+
+  function showPopup() {
+    const wrapper = document.getElementById("chiron-wrapper");
+    if (wrapper) {
+      wrapper.style.display = ""; // revert to whatever CSS originally set
+    }
   }
 
   function appendHistory(speaker, text) {
@@ -383,279 +466,114 @@
 
   // ---- 5) Event listeners ----
   promptInput.addEventListener("input", () => {
+    helpShown = false;
+    startBtnEl.textContent = "Go";
     startBtnEl.disabled = !promptInput.value.trim();
+    // Hide or clear helpful links + summary, so we rebuild for new prompt:
+    helpfulLinksEl.style.display = "none";
+    helpfulLinksContent.innerHTML = "";
+    helpfulLinksSummary.innerHTML = "";
+    statusEl.textContent = "Ready to guide you.";
   });
 
   startBtnEl.addEventListener("click", async () => {
     const promptText = promptInput.value.trim();
     if (!promptText) return;
 
-    statusEl.textContent = "⏳ Processing...";
-    startBtnEl.disabled = true;
-    automationOptions.style.display = "none";
+    // If we haven't shown help links & summary yet, do that first:
+    if (!helpShown) {
+      statusEl.textContent = "⏳ Building helpful links + summary…";
+      startBtnEl.disabled = true;
+      // Show helpful-links container:
+      helpfulLinksEl.style.display = "block";
+      helpfulLinksContent.innerHTML =
+        '<div class="loading">Loading helpful links…</div>';
+      helpfulLinksSummary.innerHTML =
+        '<div class="loading">Generating summary…</div>';
 
-    // DOMAIN CHECK:
-    if (window.location.hostname.includes("canva.com")) {
-      // 🖼️ Canva-only flow: classify → show manual vs automation buttons
-      statusEl.textContent = "⏳ Processing Canva request…";
+      // 1) Insert helpful links:
+      const links = generateHelpfulLinks(window.location.hostname);
+      helpfulLinksContent.innerHTML = links
+        .map((link) => `<a href="${link.url}" target="_blank">${link.text}</a>`)
+        .join("");
+
+      // 2) Generate summary via OpenAI:
       try {
-        const response = await new Promise((r) =>
-          chrome.runtime.sendMessage(
+        const apiKey = await loadApiKey();
+        if (apiKey) {
+          const response = await fetch(
+            "https://api.openai.com/v1/chat/completions",
             {
-              action: "runCanvaPrompt",
-              prompt: promptText,
-            },
-            r
-          )
-        );
-
-        if (!response.success) {
-          throw new Error(response.error || "No matching guide found");
-        }
-
-        // Show automation options with the guide key
-        statusEl.textContent = `✨ Found guide "${response.key}". Choose how to proceed:`;
-        statusEl.setAttribute("data-guide-key", response.key);
-        automationOptions.style.display = "block";
-
-        // Wire up the buttons
-        manualBtn.onclick = async () => {
-          try {
-            statusEl.textContent = "🔄 Starting manual guide...";
-            automationOptions.style.display = "none";
-
-            await new Promise((r) =>
-              chrome.runtime.sendMessage(
-                {
-                  action: "startManualGuide",
-                  key: response.key,
-                },
-                r
-              )
-            );
-
-            statusEl.textContent = `✅ Manual guide "${response.key}" started`;
-            closePopup();
-          } catch (err) {
-            console.error("Error starting manual guide:", err);
-            statusEl.textContent = `❌ ${err.message}`;
-            resetUI();
-          }
-        };
-
-        autoBtn.onclick = async () => {
-          try {
-            const guideKey = statusEl.getAttribute("data-guide-key");
-            if (!guideKey) {
-              throw new Error("No guide key found");
-            }
-
-            statusEl.textContent = "🤖 Starting automation...";
-            automationOptions.style.display = "none";
-            autoBtn.disabled = true;
-
-            const [{ tabId }] = await chrome.tabs.query({
-              active: true,
-              currentWindow: true,
-            });
-
-            const [result] = await chrome.scripting.executeScript({
-              target: { tabId },
-              func: async (guideKey) => {
-                try {
-                  // Load automation configuration
-                  const cfg = await fetch(
-                    chrome.runtime.getURL("Canva.automation.json")
-                  ).then((r) => r.json());
-                  const task = cfg.automationGuides.find(
-                    (a) => a.key === guideKey
-                  );
-
-                  if (!task) {
-                    throw new Error(
-                      `No automation found for key "${guideKey}"`
-                    );
-                  }
-
-                  console.group(
-                    `🌟 Running Canva automation for "${guideKey}"`
-                  );
-
-                  for (const [i, step] of task.automationSteps.entries()) {
-                    console.log(
-                      `— Step ${i + 1}/${task.automationSteps.length}:`,
-                      step
-                    );
-
-                    // Wait for element to be visible and enabled
-                    const el = await new Promise((resolve, reject) => {
-                      let elapsed = 0;
-                      const interval = 100;
-                      const check = () => {
-                        const element = document.querySelector(step.selector);
-                        if (
-                          element &&
-                          element.offsetParent !== null &&
-                          !element.disabled &&
-                          window.getComputedStyle(element).visibility !==
-                            "hidden"
-                        ) {
-                          return resolve(element);
-                        }
-                        if ((elapsed += interval) >= (step.delay || 5000)) {
-                          return reject(
-                            new Error(
-                              `Timeout waiting for visible selector: ${step.selector}`
-                            )
-                          );
-                        }
-                        setTimeout(check, interval);
-                      };
-                      check();
-                    });
-
-                    // Scroll into view instantly and wait for reflow
-                    el.scrollIntoView({ behavior: "auto", block: "center" });
-                    await new Promise((r) => setTimeout(r, 500));
-
-                    // Re-query the element to ensure we have a fresh reference
-                    const freshEl = document.querySelector(step.selector);
-                    if (!freshEl) {
-                      throw new Error(
-                        `Element disappeared after becoming visible: ${step.selector}`
-                      );
-                    }
-
-                    try {
-                      switch (step.action) {
-                        case "click":
-                          console.log(
-                            `👉 [Step ${i + 1}] Clicking`,
-                            step.selector
-                          );
-                          freshEl.click(); // This click will be trusted since it's in the context of a user gesture
-                          break;
-
-                        case "type":
-                          const text = step.value || "";
-                          console.log(
-                            `⌨️ [Step ${i + 1}] Typing into ${step.selector}:`,
-                            JSON.stringify(text)
-                          );
-                          freshEl.focus();
-                          if ("value" in freshEl) {
-                            freshEl.value = text;
-                            freshEl.dispatchEvent(
-                              new Event("input", { bubbles: true })
-                            );
-                            freshEl.dispatchEvent(
-                              new Event("change", { bubbles: true })
-                            );
-                          } else {
-                            freshEl.innerText = text;
-                            freshEl.dispatchEvent(
-                              new InputEvent("input", { bubbles: true })
-                            );
-                            freshEl.dispatchEvent(
-                              new Event("change", { bubbles: true })
-                            );
-                          }
-                          break;
-
-                        case "pressEnter":
-                          console.log(
-                            `⏎ [Step ${i + 1}] Pressing Enter on`,
-                            step.selector
-                          );
-                          freshEl.dispatchEvent(
-                            new KeyboardEvent("keydown", {
-                              key: "Enter",
-                              bubbles: true,
-                            })
-                          );
-                          freshEl.dispatchEvent(
-                            new KeyboardEvent("keyup", {
-                              key: "Enter",
-                              bubbles: true,
-                            })
-                          );
-                          freshEl.dispatchEvent(
-                            new KeyboardEvent("keypress", {
-                              key: "Enter",
-                              bubbles: true,
-                            })
-                          );
-                          break;
-
-                        default:
-                          console.warn(
-                            `⚠️ [Step ${i + 1}] Unknown action "${step.action}"`
-                          );
-                      }
-                    } catch (err) {
-                      console.error(
-                        `❌ [Step ${i + 1}] Action "${step.action}" failed:`,
-                        err
-                      );
-                      throw err;
-                    }
-
-                    // Wait for any animations or state changes to complete
-                    await new Promise((r) => setTimeout(r, step.delay || 500));
-                  }
-
-                  console.log(`✅ Completed automation for "${guideKey}"`);
-                  console.groupEnd();
-                  return { success: true };
-                } catch (err) {
-                  console.error("🚨 Canva automation error:", err);
-                  return { success: false, error: err.message };
-                }
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
               },
-              args: [guideKey],
-            });
-
-            if (!result.result.success) {
-              throw new Error(result.result.error || "Automation failed");
+              body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [
+                  {
+                    role: "system",
+                    content:
+                      "You are an expert assistant. Provide a concise, one-paragraph explanation that helps the user solve their request, referencing any documentation if helpful.",
+                  },
+                  {
+                    role: "user",
+                    content: `The user is on ${window.location.href}. The user's question is: "${promptText}".`,
+                  },
+                ],
+                temperature: 0.7,
+                max_tokens: 150,
+              }),
             }
-
-            statusEl.textContent = `✅ Automated "${guideKey}"`;
-            closePopup();
-          } catch (err) {
-            console.error("Error starting automation:", err);
-            statusEl.textContent = `❌ ${err.message}`;
-            resetUI();
+          );
+          const data = await response.json();
+          if (data.choices?.[0]?.message?.content) {
+            helpfulLinksSummary.textContent = data.choices[0].message.content;
+          } else {
+            throw new Error("No summary generated");
           }
-        };
+        } else {
+          throw new Error("No API key configured");
+        }
+      } catch (err) {
+        console.error("Failed to generate summary:", err);
+        helpfulLinksSummary.innerHTML =
+          '<div class="error">Could not generate summary.</div>';
+      }
 
-        retryBtn.onclick = () => {
-          statusEl.textContent = "Ready to guide you.";
-          automationOptions.style.display = "none";
-          resetUI();
-        };
-      } catch (err) {
-        console.error("❌ Error:", err);
-        statusEl.textContent = `❌ ${err.message}`;
-        resetUI();
-      } finally {
-        startBtnEl.disabled = false;
-      }
-    } else {
-      // 🌐 Universal flow: kick off the generic guide immediately
-      statusEl.textContent = "🔄 Starting guide…";
-      try {
-        await new Promise((r) =>
-          chrome.runtime.sendMessage(
-            { action: "startGuide", prompt: promptText },
-            r
-          )
-        );
-        statusEl.textContent = "✅ Guide started";
-        closePopup();
-      } catch (err) {
-        statusEl.textContent = `❌ ${err.message}`;
-        startBtnEl.disabled = false;
-      }
+      // Now prompt user to begin the guide:
+      startBtnEl.textContent = "Begin Guide";
+      startBtnEl.disabled = false;
+      promptInput.disabled = true;
+      helpShown = true;
+      statusEl.textContent =
+        "🔍 Review the links & summary, then click Begin Guide.";
+      return;
+    }
+
+    // If helpShown === true, user has already reviewed links & summary → start guide:
+    statusEl.textContent = "🔄 Starting guide…";
+    startBtnEl.disabled = true;
+    try {
+      // Send the actual startGuide message to background:
+      await new Promise((r) =>
+        chrome.runtime.sendMessage(
+          {
+            action: "startGuide",
+            prompt: promptText,
+            url: window.location.href,
+          },
+          r
+        )
+      );
+      // Finally, hide the popup so the guide can run:
+      hidePopup();
+      statusEl.textContent = "✅ Guide launched";
+    } catch (err) {
+      console.error("Error launching guide:", err);
+      statusEl.textContent = `❌ ${err.message}`;
+      startBtnEl.disabled = false;
     }
   });
 
@@ -696,7 +614,49 @@
 
   // Wire up close button
   closeBtnEl.addEventListener("click", () => {
-    const wrapper = document.getElementById("chiron-wrapper");
-    if (wrapper) wrapper.remove();
+    hidePopup();
+  });
+
+  // Helper to generate documentation links
+  function generateHelpfulLinks(hostname) {
+    const links = [];
+
+    // Try common documentation paths
+    const docPaths = [
+      { path: "/docs", text: "Documentation" },
+      { path: "/help", text: "Help Center" },
+      { path: "/support", text: "Support" },
+      { path: "/guide", text: "User Guide" },
+    ];
+
+    for (const { path, text } of docPaths) {
+      const url = `https://${hostname}${path}`;
+      links.push({ url, text });
+      if (links.length >= 2) break;
+    }
+
+    // If we don't have enough links, add a site-scoped search
+    if (links.length < 2) {
+      links.push({
+        url: `https://google.com/search?q=site:${hostname}`,
+        text: "Search this site",
+      });
+    }
+
+    return links;
+  }
+
+  // When the guide completes or is exited, re-open the popup preserving state:
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action === "guideEnded") {
+      showPopup();
+      // Reset button label so user can re-launch or refine
+      startBtnEl.textContent = "Go";
+      startBtnEl.disabled = false;
+      promptInput.disabled = false;
+      helpShown = false;
+      statusEl.textContent = "Ready to guide you.";
+      // Leave promptInput.value and helpful-links content as-is
+    }
   });
 })();

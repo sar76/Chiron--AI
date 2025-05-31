@@ -31,7 +31,7 @@
     },
     {
       "matches": ["https://*.canva.com/*"],
-      "js": ["Canva.js", "canva-automation.js", "popup-injector.js"],
+      "js": ["ChironCanva/Canva.js", "ChironCanva/canva-automation.js", "popup-injector.js"],
       "css": ["introjs.min.css"],
       "run_at": "document_idle"
     }
@@ -48,14 +48,14 @@
         "libs/intro.min.js",
         "libs/introjs.min.css",
         "popup-injector.js",
-        "Canva.json",
-        "Canva.automation.json",
+        "ChironCanva/Canva.json",
+        "ChironCanva/Canva.automation.json",
         "introjs.min.css"
       ],
       "matches": ["<all_urls>"]
     },
     {
-      "resources": ["Canva.json", "Canva.automation.json", "introjs.min.css"],
+      "resources": ["ChironCanva/Canva.json", "ChironCanva/Canva.automation.json", "introjs.min.css"],
       "matches": ["https://*.canva.com/*"]
     }
   ],

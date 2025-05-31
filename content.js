@@ -137,10 +137,11 @@ function showSuccessMessage(msg) {
 }
 
 // load guide data from Canva.json
-fetch(chrome.runtime.getURL("Canva.json"))
+fetch(chrome.runtime.getURL("ChironCanva/Canva.json"))
   .then((res) => res.json())
-  .then((cfg) => {
-    manualGuides = cfg.manualGuides || [];
+  .then((data) => {
+    console.log("✅ Loaded Canva.json:", data);
+    manualGuides = data.manualGuides || [];
   })
   .catch((err) => console.error("Failed to load Canva.json:", err));
 
@@ -149,15 +150,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log(`📨 Content script received message: ${message.action}`);
 
   if (message.action === "startGuide") {
-    startGuide(message.prompt)
-      .then((result) => {
-        sendResponse(result);
-      })
-      .catch((error) => {
-        console.error("❌ Error starting guide:", error);
-        sendResponse({ success: false, error: error.message });
+    console.log("📢 Content script received startGuide:", message.prompt);
+    // Store the URL for reference
+    const currentUrl = message.url || window.location.href;
+
+    // Start the guide
+    startGuide(message.prompt, currentUrl)
+      .then(sendResponse)
+      .catch((err) => {
+        console.error("❌ Guide start failed:", err);
+        sendResponse({ success: false, error: err.message });
       });
-    return true; // Keep the message channel open for the async response
+    return true; // Keep the message channel open for sendResponse
   }
 
   if (message.action === "stopGuide") {
@@ -228,7 +232,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Start the guidance process
-  async function startGuide(prompt) {
+  async function startGuide(prompt, url) {
     try {
       console.log("🔄 Starting guide with prompt:", prompt);
       // Clear any existing guide
@@ -369,12 +373,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log("✅ Tour completed");
       showSuccessMessage("Task completed successfully!");
       chrome.runtime.sendMessage({ action: "stopGuide" });
+      chrome.runtime.sendMessage({ action: "guideEnded" });
     });
 
     // On exit: clear stored state and notify background
     tour.onexit(function () {
       console.log("🔄 Tour exited");
       chrome.runtime.sendMessage({ action: "stopGuide" });
+      chrome.runtime.sendMessage({ action: "guideEnded" });
     });
 
     // Start the tour and persist initial state

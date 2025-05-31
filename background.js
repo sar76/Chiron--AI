@@ -32,10 +32,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Firebase configuration
-const FIREBASE_PROJECT_ID = "chiron-nbfpl-test";
-const FIREBASE_FUNCTIONS_URL = `https://us-central1-${FIREBASE_PROJECT_ID}.cloudfunctions.net`;
-
 // Generate or retrieve user ID
 async function getUserId() {
   return new Promise((resolve) => {
@@ -123,42 +119,42 @@ async function getApiKeyFromStorage() {
   }
 })();
 
-// Log all incoming messages
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  console.log(`📨 Received message: ${msg.action}`, msg);
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "startGuide") {
+    // Set the prompt before forwarding
+    userPrompt = message.prompt;
+    console.log("📢 Background received startGuide:", userPrompt);
+    // Forward to content script
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          {
+            action: "startGuide",
+            prompt: message.prompt,
+            url: message.url,
+          },
+          sendResponse
+        );
+      }
+    });
+    return true; // Keep the message channel open for sendResponse
+  }
 
-  switch (msg.action) {
+  console.log(`📨 Received message: ${message.action}`, message);
+
+  switch (message.action) {
     case "persistGuideState":
       if (sender.tab?.id) {
         console.log(`📥 Received guide state from tab ${sender.tab.id}`);
         const key = GUIDE_KEY(sender.tab.id);
-        chrome.storage.local.set({ [key]: msg.state }, () => {
+        chrome.storage.local.set({ [key]: message.state }, () => {
           sendResponse({ success: true });
         });
         return true;
       }
       break;
-
-    case "startGuide":
-      // ← ensure analyzeDom sees our prompt
-      userPrompt = msg.prompt;
-      // Get the active tab
-      chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-        if (tabs.length === 0) {
-          sendResponse({ success: false, error: "No active tab found" });
-          return;
-        }
-
-        try {
-          // Send message to content script
-          const response = await chrome.tabs.sendMessage(tabs[0].id, msg);
-          sendResponse(response);
-        } catch (error) {
-          console.error("❌ Error routing message to content script:", error);
-          sendResponse({ success: false, error: error.message });
-        }
-      });
-      return true;
 
     case "stopGuide":
       if (sender.tab?.id) {
@@ -173,7 +169,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               }
 
               try {
-                const response = await chrome.tabs.sendMessage(tabs[0].id, msg);
+                const response = await chrome.tabs.sendMessage(
+                  tabs[0].id,
+                  message
+                );
                 sendResponse(response);
               } catch (error) {
                 console.error(
@@ -190,7 +189,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case "setPrompt":
-      userPrompt = msg.prompt;
+      userPrompt = message.prompt;
       console.log("✅ Prompt set:", userPrompt);
       sendResponse({ success: true, prompt: userPrompt });
       return true;
@@ -207,7 +206,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ success: false, error: "No instructions provided" });
         return true;
       }
-      analyzeDomForGuidance(msg.domSnapshot, sender, sendResponse);
+      analyzeDomForGuidance(message.domSnapshot, sender, sendResponse);
       return true;
 
     case "runCanvaPrompt":
@@ -221,7 +220,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
 
           // Get the manual guides listing
-          const guides = await fetch(chrome.runtime.getURL("Canva.json"))
+          const guides = await fetch(
+            chrome.runtime.getURL("ChironCanva/Canva.json")
+          )
             .then((res) => res.json())
             .then((cfg) => cfg.manualGuides || [])
             .catch(() => []);
@@ -248,7 +249,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   },
                   {
                     role: "user",
-                    content: `User request: "${msg.prompt}"\nRespond with the single best guide key exactly.`,
+                    content: `User request: "${message.prompt}"\nRespond with the single best guide key exactly.`,
                   },
                 ],
                 temperature: 0,
@@ -268,7 +269,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case "runCanvaTask":
       if (sender.tab?.id) {
-        chrome.tabs.sendMessage(sender.tab.id, msg, sendResponse);
+        chrome.tabs.sendMessage(sender.tab.id, message, sendResponse);
         return true;
       }
       break;
@@ -277,7 +278,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case "startManualGuide":
       if (sender.tab?.id) {
         console.log(`📤 Forwarding startManualGuide to tab ${sender.tab.id}`);
-        chrome.tabs.sendMessage(sender.tab.id, msg, sendResponse);
+        chrome.tabs.sendMessage(sender.tab.id, message, sendResponse);
         return true; // keep the port open for the async response
       }
       break;
@@ -301,7 +302,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             },
             body: JSON.stringify({
               model: "gpt-4o-mini",
-              prompt: msg.prompt,
+              prompt: message.prompt,
               max_tokens: 64,
               n: 3,
             }),
@@ -413,6 +414,36 @@ function sendError(message, details = null) {
   }
 }
 
+// ───────────────────────────────────────────────────────────────────────────────
+// New: Enhanced prompt—always capture a "Login" (or any) button by text if CSS fails
+const SYSTEM_PROMPT_START =
+  `You are a precise DOM-navigator agent. Given a DOM snapshot (HTML) and a user goal, ` +
+  `output a JSON array of step-objects. Each step-object must have exactly these keys: ` +
+  `"step", "element", "selector", "xpath", "text", "description". ` +
+  `Do not output anything else (no explanations, no markdown). ` +
+  `Follow these rules for each step:` +
+  `\n\n1. step (integer): The 1-based index (1,2,3…) in the sequence.` +
+  `\n2. element (string): A concise, human-friendly name for the element (e.g., "Login Button", "Search Field", "Submit Link").` +
+  `\n3. selector (string): A valid CSS selector that matches exactly one element in the snapshot. ` +
+  `   - First attempt a unique ID or data-attribute (e.g. "#loginBtn" or "[data-action='next']"). ` +
+  `   - Otherwise, use class names + hierarchy (e.g. ".nav > button.sign-in"), ensuring it selects exactly one node. ` +
+  `   - If you cannot produce a unique CSS selector for that element, set selector to an empty string and rely on rule 4's fallback.` +
+  `\n4. xpath (string): The full XPath pointing to that same element (e.g. "/html/body/div[1]/button[2]"). ` +
+  `   - If selector is non-empty, xpath should still point to the identical element. ` +
+  `   - If selector is empty, build an XPath using the element's exact visible text or aria-label, for example: //button[text()="Log in"] or //div[@aria-label="Log in"]. ` +
+  `     This applies even if the element isn't a <button>, as long as the text or aria-label exactly matches the visible label. ` +
+  `   - If inside an iframe, prefix with "iframe[name=\\"…\\"] #xpath_inside".` +
+  `\n5. text (string): The element's visible text, placeholder, or aria-label exactly as the user sees it (e.g., "Log in", "Search").` +
+  `\n6. description (string): A short imperative instruction on how to interact (e.g. "Click the login button", "Enter password into the field").` +
+  `\n\nOnly include interactive elements (buttons, links, inputs, selects, textareas,[role=button],[role=link],[tabindex]>=0). ` +
+  `If no CSS selector exists, you must locate the element by its exact text (rule 4's fallback). ` +
+  `List steps in logical order to achieve the user's goal. ` +
+  `Ensure the final output is valid JSON. Do not wrap the JSON in code fences or add any extra text.\n\n` +
+  `Respond with exactly this JSON structure (no extra keys):\n` +
+  `[{\n  "step": 1,\n  "element": "Login Button",\n  "selector": "button[aria-label='Log in']",\n  "xpath": "/html/body/div[2]/div[1]/button[1]",\n  "text": "Log in",\n  "description": "Click the login button"\n}]`;
+const SYSTEM_PROMPT_END = ``;
+// ───────────────────────────────────────────────────────────────────────────────
+
 async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
   try {
     console.log("🔄 Analyzing DOM for guidance...");
@@ -426,65 +457,17 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
     // Get user ID for this session
     const userId = await getUserId();
 
-    // Save DOM snapshot to Firebase
-    await fetch(`${FIREBASE_FUNCTIONS_URL}/saveDomSnapshot`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: sender.tab.url,
-        userId: userId,
-        timestamp: new Date().toISOString(),
-        elements: domSnapshot,
-      }),
-    });
-
-    // Retrieve past snapshots from Firebase
-    // const mem = await fetch(`${FIREBASE_FUNCTIONS_URL}/retrieveMemory`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({
-    //     url: sender.tab.url,
-    //     limit: 5,
-    //   }),
-    // }).then((r) => r.json());
-
-    // const pastSnapshots = mem.memories;
-    const pastSnapshots = [];
-
     // 1️⃣ Build the JSON payload for the AI
     const payload = {
       model: "gpt-4o-mini", // or "gpt-4o-mini" for lower cost
       messages: [
         {
           role: "system",
-          content:
-            "You are an expert DOM analysis model specialized in generating highly precise and robust interaction sequences across diverse and dynamic web interfaces. " +
-            "You translate a DOM snapshot and a user's high-level objective into an exact, logically ordered set of actionable steps a user or automation can follow to complete that objective reliably. " +
-            "For each step, do the following: " +
-            "1) Identify all candidate interactive elements (buttons, links, input fields, dropdowns, checkboxes, radio buttons, textareas) that could advance the user's goal. " +
-            "2) Perform a probability analysis using your model confidence and DOM context to rank these candidates; select the element with the highest likelihood of being the correct next step. " +
-            "3) Determine the most stable, unique CSS selector for that chosen element, prioritizing in order: id attributes, data-* attributes, aria-label, name attributes, class names with enough specificity, then nth-of-type or attribute selectors, and as a last resort a full nested path. " +
-            "4) Provide the full XPath expression for the element. " +
-            "5) Extract the element's visible text, placeholder, or aria-label as the text field. " +
-            "6) If the element is inside a shadow DOM or iframe, include the appropriate shadow-host or iframe selector syntax in the CSS selector (e.g., 'shadow-host-selector >>> #element', 'iframe[name=\"login\"] #submit'). " +
-            "7) Ensure the selector matches exactly one element; if not, iteratively refine it until it does. " +
-            "8) If the element may load asynchronously, include in the description a note to wait for element to be visible." +
-            "9) Write a concise imperative description of the action (e.g., Click the login button, Enter text into the search input). " +
-            "Focus exclusively on interactive UI components. Do not include any non-interactive elements or commentary. " +
-            "Return ONLY a valid JSON array matching this exact structure: " +
-            '[{"step": 1, "element": "Login Button", "action": "click", "selector": "#login-btn", "xpath": "//button[@id=\'login-btn\']", "text": "Log In", "description": "Click the login button"}]',
+          content: SYSTEM_PROMPT_START,
         },
         {
           role: "user",
-          content:
-            "Here is the user's goal: " +
-            userPrompt +
-            "\n\n" +
-            "Here is a snapshot of the current DOM: " +
-            domSnapshot +
-            "\n\n" +
-            "Here are past snapshots for context: " +
-            JSON.stringify(pastSnapshots),
+          content: `DOM Snapshot:\n${domSnapshot}\nUser Intent:\n"${userPrompt}"\nInclude no additional text.`,
         },
       ],
     };
@@ -521,22 +504,6 @@ async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
     // Log the selectors being generated
     steps.forEach((step) => {
       console.log(`Step ${step.step}: Selector = "${step.selector}"`);
-    });
-
-    // After generating steps, record the interaction
-    await fetch(`${FIREBASE_FUNCTIONS_URL}/recordInteraction`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: userId,
-        url: sender.tab.url,
-        query: userPrompt,
-        stepsOffered: steps.map((s) => ({
-          step: s.step,
-          chosen: s.chosen ?? false,
-        })),
-        timestamp: new Date().toISOString(),
-      }),
     });
 
     // 5️⃣ Send steps back to content script

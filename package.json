@@ -1,5 +1,15 @@
 {
+  "name": "navigation-extension",
+  "version": "1.0.0",
+  "description": "Browser extension for navigation assistance",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "firebase": "^11.6.1"
+    "intro.js": "^7.2.0"
   }
 }

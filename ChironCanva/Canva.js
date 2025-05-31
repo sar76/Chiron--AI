@@ -111,7 +111,7 @@
 
   // Load only manualGuides from JSON
   let manualGuides = [];
-  fetch(chrome.runtime.getURL("Canva.json"))
+  fetch(chrome.runtime.getURL("./Canva.json"))
     .then((res) => res.json())
     .then((cfg) => {
       manualGuides = cfg.manualGuides || [];
