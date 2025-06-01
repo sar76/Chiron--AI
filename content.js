@@ -19,6 +19,15 @@ let manualGuides = [];
 // Log when content script loads
 console.log("🔄 Content script loaded");
 
+// Helper to get API key from chrome.storage
+async function getApiKeyFromStorage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get("chironApiKey", (result) => {
+      resolve(result.chironApiKey || "");
+    });
+  });
+}
+
 // Load Intro.js (now preloaded as a content script)
 async function loadIntroJs() {
   if (!window.introJs) throw new Error("Intro.js not found");
@@ -145,23 +154,134 @@ fetch(chrome.runtime.getURL("ChironCanva/Canva.json"))
   })
   .catch((err) => console.error("Failed to load Canva.json:", err));
 
-// Main guidance dispatcher
+// 1) Parse the one-paragraph summary into simple steps
+function parseSummaryIntoSteps(summaryText) {
+  const sentences = summaryText
+    .split(/[\r\n]+|\. /) // split on newlines or ". "
+    .map((s) => s.trim())
+    .filter((s) => s.length);
+  return sentences.map((sentence, idx) => ({
+    step: idx + 1,
+    rawText: sentence,
+    elementName: "", // to fill in Phase 2
+    selector: "", // to fill in Phase 2
+    xpath: "", // to fill in Phase 2
+    description: sentence,
+  }));
+}
+
+// 2) Take those high-level steps and locate each element in the DOM
+async function locateElementsForSteps(steps) {
+  const domSnapshot = serializeDom(); // your existing function
+  const apiKey = await getApiKeyFromStorage(); // existing helper
+  if (!apiKey) throw new Error("No API key configured");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `You are a helper that takes a list of high-level instructions (plain English) and a DOM snapshot. For each instruction, return exactly one CSS selector and one XPath that matches a single element. Output valid JSON array of objects with keys: "step","elementName","selector","xpath". Example:
+
+[
+  {
+    "step": 1,
+    "elementName": "Upload Button",
+    "selector": "button#uploadBtn",
+    "xpath": "/html/body/div[1]/button[2]"
+  },
+  {
+    "step": 2,
+    "elementName": "Submit Form",
+    "selector": "form#submitForm",
+    "xpath": "/html/body/div[1]/form[1]"
+  }
+]`,
+      },
+      {
+        role: "user",
+        content: `DOM Snapshot:\n${domSnapshot}\n\nHigh-level steps:\n${JSON.stringify(
+          steps.map((s) => ({ step: s.step, rawText: s.rawText })),
+          null,
+          2
+        )}`,
+      },
+    ],
+  };
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Locator API failed: ${response.status} ${text}`);
+  }
+
+  let assistantContent = (
+    await response.json()
+  ).choices[0].message.content.trim();
+  assistantContent = assistantContent
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  let locatedArray;
+  try {
+    locatedArray = JSON.parse(assistantContent);
+  } catch (e) {
+    console.error("Failed to parse locator JSON:", e, assistantContent);
+    throw e;
+  }
+
+  return steps.map((step) => {
+    const found = locatedArray.find((o) => o.step === step.step) || {};
+    return {
+      ...step,
+      elementName: found.elementName || step.rawText,
+      selector: found.selector || "",
+      xpath: found.xpath || "",
+    };
+  });
+}
+
+// Update the message listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log(`📨 Content script received message: ${message.action}`);
-
   if (message.action === "startGuide") {
-    console.log("📢 Content script received startGuide:", message.prompt);
-    // Store the URL for reference
-    const currentUrl = message.url || window.location.href;
+    const summaryText = message.summaryText || "";
+    const promptText = message.prompt;
+    console.log(
+      "📢 Content.js starting two-phase workflow; prompt:",
+      promptText
+    );
+    console.log("📝 SummaryText:", summaryText);
 
-    // Start the guide
-    startGuide(message.prompt, currentUrl)
-      .then(sendResponse)
-      .catch((err) => {
-        console.error("❌ Guide start failed:", err);
+    (async () => {
+      try {
+        // PHASE 1: parse summary → high-level steps
+        let steps = parseSummaryIntoSteps(summaryText);
+        console.log("▶️ Parsed high-level steps:", steps);
+
+        // PHASE 2: locate each step's element in the DOM
+        steps = await locateElementsForSteps(steps);
+        console.log("🔍 Located selectors/xpaths:", steps);
+
+        allSteps = steps; // store globally for Intro.js
+        showIntroJsGuidance(steps); // your existing function to launch Intro.js
+        sendResponse({ success: true });
+      } catch (err) {
+        console.error("❌ Two-phase guide failed:", err);
+        showError("Error: " + err.message); // your existing UI helper
         sendResponse({ success: false, error: err.message });
-      });
-    return true; // Keep the message channel open for sendResponse
+      }
+    })();
+
+    return true; // keep messaging channel open
   }
 
   if (message.action === "stopGuide") {
@@ -303,7 +423,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (!element) {
           console.warn(
-            `⚠️ Element not found for step ${step.step}: ${step.element}`
+            `⚠️ Element not found for step ${step.step}: ${step.elementName}`
           );
           console.warn(`Failed selector: ${step.selector}`);
 
@@ -323,7 +443,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         return {
           element: element,
-          intro: `<strong>Step ${step.step}: ${step.element}</strong><br>${step.description}`,
+          intro: `<strong>Step ${step.step}: ${step.elementName}</strong><br>${step.description}`,
           position: "auto",
         };
       })

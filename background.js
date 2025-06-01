@@ -52,6 +52,7 @@ async function getUserId() {
 console.log("🔄 Background script loaded");
 
 let userPrompt = ""; // holds the instructions for this session
+let userSummary = "";
 
 const GUIDE_KEY = (tabId) => `guide_state_${tabId}`;
 
@@ -122,24 +123,29 @@ async function getApiKeyFromStorage() {
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "startGuide") {
-    // Set the prompt before forwarding
     userPrompt = message.prompt;
-    console.log("📢 Background received startGuide:", userPrompt);
-    // Forward to content script
+    userSummary = message.summaryText || "";
+    console.log("📢 Background received startGuide; prompt:", userPrompt);
+    console.log("📝 Background received summary:", userSummary);
+
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(
-          tabs[0].id,
-          {
-            action: "startGuide",
-            prompt: message.prompt,
-            url: message.url,
-          },
-          sendResponse
-        );
+      if (!tabs[0]) {
+        sendResponse({ success: false, error: "No active tab" });
+        return;
       }
+      chrome.tabs.sendMessage(
+        tabs[0].id,
+        {
+          action: "startGuide",
+          prompt: userPrompt,
+          url: message.url,
+          summaryText: userSummary,
+        },
+        sendResponse
+      );
     });
-    return true; // Keep the message channel open for sendResponse
+
+    return true; // keep channel open for sendResponse
   }
 
   console.log(`📨 Received message: ${message.action}`, message);

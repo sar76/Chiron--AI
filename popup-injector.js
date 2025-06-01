@@ -179,23 +179,6 @@
     flex: 0 0 auto;    /* don't grow or shrink */
   }
 
-  .chiron-popup .helpful-links .links {
-    margin-bottom: 12px;
-    flex: 0 0 auto;    /* don't grow or shrink */
-  }
-
-  .chiron-popup .helpful-links .links a {
-    display: block;
-    color: #0e639c;
-    text-decoration: none;
-    margin-bottom: 4px;
-    font-size: 13px;
-  }
-
-  .chiron-popup .helpful-links .links a:hover {
-    text-decoration: underline;
-  }
-
   .chiron-popup .helpful-links .summary {
     color: #ddd;
     font-size: 13px;
@@ -356,8 +339,7 @@
           </div>
           <div class="status" id="statusMessage">Ready to guide you.</div>
           <div class="helpful-links" id="helpfulLinks">
-            <h4>Helpful Links</h4>
-            <div class="links"></div>
+            <h4>Summary</h4>
             <div class="summary"></div>
           </div>
           <div id="automationOptions">
@@ -409,7 +391,6 @@
   const settingsCloseBtn = document.getElementById("settings-close");
   const mainUI = document.getElementById("mainUI");
   const helpfulLinksEl = document.getElementById("helpfulLinks");
-  const helpfulLinksContent = helpfulLinksEl.querySelector(".links");
   const helpfulLinksSummary = helpfulLinksEl.querySelector(".summary");
 
   // ---- 4) Load stored API key ----
@@ -471,7 +452,6 @@
     startBtnEl.disabled = !promptInput.value.trim();
     // Hide or clear helpful links + summary, so we rebuild for new prompt:
     helpfulLinksEl.style.display = "none";
-    helpfulLinksContent.innerHTML = "";
     helpfulLinksSummary.innerHTML = "";
     statusEl.textContent = "Ready to guide you.";
   });
@@ -480,94 +460,80 @@
     const promptText = promptInput.value.trim();
     if (!promptText) return;
 
-    // If we haven't shown help links & summary yet, do that first:
+    // PHASE 1: Generate and show a one-paragraph summary of steps
     if (!helpShown) {
-      statusEl.textContent = "⏳ Building helpful links + summary…";
+      statusEl.textContent = "⏳ Generating summary…";
       startBtnEl.disabled = true;
-      // Show helpful-links container:
       helpfulLinksEl.style.display = "block";
-      helpfulLinksContent.innerHTML =
-        '<div class="loading">Loading helpful links…</div>';
       helpfulLinksSummary.innerHTML =
         '<div class="loading">Generating summary…</div>';
 
-      // 1) Insert helpful links:
-      const links = generateHelpfulLinks(window.location.hostname);
-      helpfulLinksContent.innerHTML = links
-        .map((link) => `<a href="${link.url}" target="_blank">${link.text}</a>`)
-        .join("");
-
-      // 2) Generate summary via OpenAI:
       try {
         const apiKey = await loadApiKey();
-        if (apiKey) {
-          const response = await fetch(
-            "https://api.openai.com/v1/chat/completions",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [
-                  {
-                    role: "system",
-                    content:
-                      "You are an expert assistant. Provide a concise, one-paragraph explanation that helps the user solve their request, referencing any documentation if helpful.",
-                  },
-                  {
-                    role: "user",
-                    content: `The user is on ${window.location.href}. The user's question is: "${promptText}".`,
-                  },
-                ],
-                temperature: 0.7,
-                max_tokens: 150,
-              }),
-            }
-          );
-          const data = await response.json();
-          if (data.choices?.[0]?.message?.content) {
-            helpfulLinksSummary.textContent = data.choices[0].message.content;
-          } else {
-            throw new Error("No summary generated");
+        if (!apiKey) throw new Error("No API key available");
+
+        const response = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-3.5-turbo",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are an expert assistant. Provide a concise, one-paragraph summary of steps that help the user solve their request in plain language.",
+                },
+                {
+                  role: "user",
+                  content: `The user is on ${window.location.href} and asks: "${promptText}".`,
+                },
+              ],
+              temperature: 0.7,
+              max_tokens: 150,
+            }),
           }
-        } else {
-          throw new Error("No API key configured");
-        }
+        );
+
+        const data = await response.json();
+        const summary = data.choices?.[0]?.message?.content?.trim();
+        if (!summary) throw new Error("No summary generated");
+
+        helpfulLinksSummary.textContent = summary;
       } catch (err) {
         console.error("Failed to generate summary:", err);
         helpfulLinksSummary.innerHTML =
           '<div class="error">Could not generate summary.</div>';
       }
 
-      // Now prompt user to begin the guide:
+      // Switch button to "Begin Guide"
       startBtnEl.textContent = "Begin Guide";
       startBtnEl.disabled = false;
       promptInput.disabled = true;
       helpShown = true;
-      statusEl.textContent =
-        "🔍 Review the links & summary, then click Begin Guide.";
+      statusEl.textContent = "🔍 Review the summary, then click Begin Guide.";
       return;
     }
 
-    // If helpShown === true, user has already reviewed links & summary → start guide:
+    // PHASE 2: User clicked "Begin Guide," so send both prompt+summary to background.js
     statusEl.textContent = "🔄 Starting guide…";
     startBtnEl.disabled = true;
     try {
-      // Send the actual startGuide message to background:
-      await new Promise((r) =>
+      await new Promise((resolve) =>
         chrome.runtime.sendMessage(
           {
             action: "startGuide",
             prompt: promptText,
             url: window.location.href,
+            summaryText: helpfulLinksSummary.textContent,
           },
-          r
+          resolve
         )
       );
-      // Finally, hide the popup so the guide can run:
       hidePopup();
       statusEl.textContent = "✅ Guide launched";
     } catch (err) {
@@ -615,48 +581,5 @@
   // Wire up close button
   closeBtnEl.addEventListener("click", () => {
     hidePopup();
-  });
-
-  // Helper to generate documentation links
-  function generateHelpfulLinks(hostname) {
-    const links = [];
-
-    // Try common documentation paths
-    const docPaths = [
-      { path: "/docs", text: "Documentation" },
-      { path: "/help", text: "Help Center" },
-      { path: "/support", text: "Support" },
-      { path: "/guide", text: "User Guide" },
-    ];
-
-    for (const { path, text } of docPaths) {
-      const url = `https://${hostname}${path}`;
-      links.push({ url, text });
-      if (links.length >= 2) break;
-    }
-
-    // If we don't have enough links, add a site-scoped search
-    if (links.length < 2) {
-      links.push({
-        url: `https://google.com/search?q=site:${hostname}`,
-        text: "Search this site",
-      });
-    }
-
-    return links;
-  }
-
-  // When the guide completes or is exited, re-open the popup preserving state:
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === "guideEnded") {
-      showPopup();
-      // Reset button label so user can re-launch or refine
-      startBtnEl.textContent = "Go";
-      startBtnEl.disabled = false;
-      promptInput.disabled = false;
-      helpShown = false;
-      statusEl.textContent = "Ready to guide you.";
-      // Leave promptInput.value and helpful-links content as-is
-    }
   });
 })();
