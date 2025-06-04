@@ -1,4 +1,33 @@
 // background.js
+
+// -------------- Analytics constants and helper --------------
+// Replace with your actual analytics endpoint:
+const ANALYTICS_URL =
+  "https://webhook.site/f19b3b33-cffa-4dba-bdba-94922f9c1c4f";
+
+/**
+ * sendAnalyticsEvent(eventType)
+ *   → Uses getUserId() to get or create the user's UUID
+ *   → POSTs { userId, event, timestamp } to ANALYTICS_URL
+ */
+async function sendAnalyticsEvent(eventType) {
+  try {
+    const userId = await getUserId();
+    await fetch(ANALYTICS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        event: eventType,
+        timestamp: Date.now(),
+      }),
+    });
+  } catch (err) {
+    console.error("⚠️ Analytics error:", err);
+  }
+}
+// -------------------------------------------------------------
+
 console.log("🚀 Background script starting...");
 
 // Listen for extension icon clicks
@@ -47,6 +76,13 @@ async function getUserId() {
     });
   });
 }
+
+// When the extension is first installed, send an "install" event
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
+    sendAnalyticsEvent("install");
+  }
+});
 
 // Log when background script loads
 console.log("🔄 Background script loaded");
@@ -225,6 +261,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
 
+          // Track this OpenAI call
+          await sendAnalyticsEvent("api_call");
+
           // Get the manual guides listing
           const guides = await fetch(
             chrome.runtime.getURL("ChironCanva/Canva.json")
@@ -292,14 +331,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "fetchSuggestion":
       (async () => {
         try {
-          // get API key from storage
           const apiKey = await getApiKeyFromStorage();
           if (!apiKey) {
-            sendResponse({ success: false, error: "No API key configured" });
+            sendResponse({ error: "No API key set." });
             return;
           }
 
-          // call OpenAI
+          // Track this OpenAI call
+          await sendAnalyticsEvent("api_call");
+
           const apiRes = await fetch("https://api.openai.com/v1/completions", {
             method: "POST",
             headers: {
@@ -453,6 +493,9 @@ const SYSTEM_PROMPT_END = ``;
 async function analyzeDomForGuidance(domSnapshot, sender, sendResponse) {
   try {
     console.log("🔄 Analyzing DOM for guidance...");
+
+    // Track this OpenAI call
+    await sendAnalyticsEvent("api_call");
 
     // Get API key from storage
     const apiKey = await getApiKeyFromStorage();
